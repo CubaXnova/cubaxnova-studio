@@ -37,9 +37,11 @@ tamaños (p. ej. `battleship_micro.jpg` 28×28 y `battleship_small.jpg` 40×40).
    El original solo sirve para saber QUÉ objeto es; el estilo viene de la imagen de referencia.
 3. **Deriva los tamaños** a partir de la maestra (sin volver a usar imagegen), con Python + Pillow
    (si falta: `python3 -m pip install --user --break-system-packages pillow`) o ImageMagick si existe:
-   - mismo **nombre**, **formato** (jpg/png) y **tamaño exacto** que cada original;
+   - **siempre PNG con fondo transparente** (aunque el original sea JPG), mismo nombre base y **tamaño exacto** que cada original:
+     `battleship_small.jpg` → `battleship_small.png`;
    - guarda en `arte/nuevas/<misma ruta que el original>`;
-   - si el original es JPG (sin transparencia), rellena el fondo con el color de la esquina del original;
+   - si el original era JPG, apúntalo en `arte/cambios-de-extension.md` (ruta original → ruta nueva), porque luego
+     habrá que cambiar esas referencias en el código del juego;
    - redimensiona con buen filtro (LANCZOS) y, para iconos ≤ 64 px, aumenta un poco el contraste para que se lea bien.
 4. Trabaja por **tandas de 5 objetos** y anota cada uno en `arte/progreso.md` (objeto → maestra → archivos derivados → ✅/❌).
 5. Al terminar la tanda, muestra en el chat las maestras con enlaces markdown y espera el visto bueno antes de seguir.
