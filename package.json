@@ -12,7 +12,8 @@
     "codex": "node scripts/codex.js",
     "claude-login": "node scripts/claude.js auth login",
     "claude-status": "node scripts/claude.js auth status --text",
-    "claude": "node scripts/claude.js"
+    "claude": "node scripts/claude.js",
+    "capturar": "node scripts/captura-web.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -38,6 +39,7 @@
     "dompurify": "^3.4.18",
     "express": "^5.3.0",
     "marked": "^18.2.1",
+    "playwright-core": "^1.65.1",
     "web-push": "^4.0.0",
     "ws": "^8.23.0"
   }

@@ -1,0 +1,27 @@
+[
+  {
+    "id": "web",
+    "name": "Equipo Web",
+    "description": "Diseño UI, frontend, backend, accesibilidad, rendimiento y SEO para webs modernas.",
+    "repo": "VoltAgent/awesome-claude-code-subagents",
+    "path": "categories",
+    "agents": ["ui-designer", "frontend-developer", "backend-developer", "accessibility-tester", "performance-engineer", "seo-specialist"],
+    "skills": ["verificar-web"]
+  },
+  {
+    "id": "laravel",
+    "name": "Equipo Laravel / PHP",
+    "description": "Laravel, PHP, SQL y seguridad para proyectos como CubaXnova o Mesa 55.",
+    "repo": "VoltAgent/awesome-claude-code-subagents",
+    "path": "categories",
+    "agents": ["laravel-specialist", "php-pro", "sql-pro", "security-auditor", "code-reviewer"]
+  },
+  {
+    "id": "app-movil",
+    "name": "Equipo App móvil",
+    "description": "Android/Kotlin, Flutter y React Native.",
+    "repo": "VoltAgent/awesome-claude-code-subagents",
+    "path": "categories",
+    "agents": ["mobile-developer", "kotlin-specialist", "flutter-expert", "expo-react-native-expert"]
+  }
+]

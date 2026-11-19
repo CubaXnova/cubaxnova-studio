@@ -50,11 +50,30 @@ export function parseFrontmatter(text) {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
   if (!m) return { meta: {}, body: text };
   const meta = {};
-  for (const line of m[1].split('\n')) {
-    const kv = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (kv) meta[kv[1]] = kv[2].trim().replace(/^["']|["']$/g, '');
+  const lines = m[1].split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const kv = lines[i].match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!kv) continue;
+    let val = kv[2].trim();
+    if (/^[>|][-+]?$/.test(val)) { // bloque YAML de varias líneas
+      const block = [];
+      while (i + 1 < lines.length && /^\s+\S|^\s*$/.test(lines[i + 1])) block.push(lines[++i].trim());
+      val = block.join(' ').trim();
+    }
+    meta[kv[1]] = val.replace(/^["']|["']$/g, '');
   }
   return { meta, body: m[2] };
+}
+
+// Agentes de Codex en TOML (name, description, developer_instructions).
+function parseToml(text) {
+  const get = (k) => {
+    const triple = text.match(new RegExp(`^${k}\\s*=\\s*("""|''')([\\s\\S]*?)\\1`, 'm'));
+    if (triple) return triple[2].trim();
+    const one = text.match(new RegExp(`^${k}\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, 'm'));
+    return one ? one[1].replace(/\\"/g, '"') : '';
+  };
+  return { meta: { name: get('name'), description: get('description') }, body: get('developer_instructions') || get('instructions') };
 }
 
 const oneLine = (s) => String(s || '').replace(/[\r\n]+/g, ' ').trim();
@@ -71,7 +90,7 @@ export function listAgents() {
     const { meta, body } = parseFrontmatter(fs.readFileSync(file, 'utf8'));
     return {
       id, name: meta.name || id, description: meta.description || '', role: meta.role || 'subagente',
-      instructions: body.trim(), builtin, enabled: state.agents.includes(id),
+      instructions: body.trim(), builtin, source: meta.source || (builtin ? 'proyecto' : 'propio'), enabled: state.agents.includes(id),
     };
   });
 }
@@ -155,16 +174,25 @@ export function remove(kind, id) {
   if (kind === 'skill') syncSkills();
 }
 
-// Importa skills de código abierto desde un repo público de GitHub (p. ej. anthropics/skills, openai/skills).
-// Busca carpetas con SKILL.md y las copia DESACTIVADAS para que tú decidas cuáles encender.
-export async function importSkills(repo, subdir = '') {
-  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('Usa el formato dueño/repo');
+async function withClone(repo, subdir, fn) {
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo || '')) throw new Error('Usa el formato dueño/repo');
   if (subdir && !/^[\w./-]+$/.test(subdir)) throw new Error('Subcarpeta no válida');
   const tmp = fs.mkdtempSync(path.join(config.dataDir, 'import-'));
   try {
-    await run('git', ['clone', '--depth', '1', `https://github.com/${repo}.git`, tmp], { timeout: 120_000 });
+    await run('git', ['clone', '--depth', '1', `https://github.com/${repo}.git`, tmp], { timeout: 180_000 });
     const base = path.resolve(tmp, subdir || '.');
-    if (!base.startsWith(tmp)) throw new Error('Ruta no válida');
+    if (base !== tmp && !base.startsWith(tmp + path.sep)) throw new Error('Ruta no válida');
+    if (!fs.existsSync(base)) throw new Error('Esa subcarpeta no existe en el repositorio');
+    return await fn(base);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// Importa skills de código abierto desde un repo público de GitHub (p. ej. anthropics/skills, openai/skills).
+// Busca carpetas con SKILL.md y las copia DESACTIVADAS para que tú decidas cuáles encender.
+export async function importSkills(repo, subdir = '') {
+  return withClone(repo, subdir, async (base) => {
     const found = [];
     const walk = (dir, depth) => {
       if (depth > 4) return;
@@ -181,14 +209,63 @@ export async function importSkills(repo, subdir = '') {
       const id = slug(meta.name || path.basename(p));
       if (!ID_RE.test(id) || skillDirs().some((d) => d.id === id)) continue;
       const dest = path.join(USER_SKILLS_DIR, id);
-      fs.cpSync(p, dest, { recursive: true, filter: (s) => !fs.lstatSync(s).isSymbolicLink() });
+      fs.cpSync(p, dest, { recursive: true, filter: (src) => !fs.lstatSync(src).isSymbolicLink() });
       fs.writeFileSync(path.join(dest, '.source'), `github.com/${repo}`);
       imported.push(id);
     }
     return imported;
-  } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  }
+  });
+}
+
+// Importa AGENTES de colecciones abiertas (Markdown con frontmatter de Claude Code, o TOML de Codex).
+// Llegan DESACTIVADOS como subagentes. `only` = lista de nombres para traer solo esos (equipos).
+const SKIP_FILE = /^(readme|contributing|changelog|license|claude|agents|skill|code_of_conduct|security|architecture)\.(md|toml)$/i;
+const SKIP_DIR = new Set(['.git', 'node_modules', '.github', 'docs', 'skills', 'commands', 'tools', 'templates', 'examples']);
+export async function importAgents(repo, subdir = '', only = null) {
+  const wanted = only ? new Set(only.map(slug)) : null;
+  return withClone(repo, subdir, async (base) => {
+    const files = [];
+    const walk = (dir, depth) => {
+      if (depth > 5) return;
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { if (!SKIP_DIR.has(e.name)) walk(p, depth + 1); } else if (/\.(md|toml)$/i.test(e.name) && !SKIP_FILE.test(e.name)) files.push(p);
+      }
+    };
+    walk(base, 0);
+    const imported = [];
+    const existing = new Set(agentFiles().map((a) => a.id));
+    for (const f of files) {
+      const text = fs.readFileSync(f, 'utf8');
+      if (text.length > 200_000) continue;
+      const { meta, body } = f.endsWith('.toml') ? parseToml(text) : parseFrontmatter(text);
+      if (!meta.name || !meta.description || String(body).trim().length < 80) continue;
+      const id = slug(meta.name);
+      if (!ID_RE.test(id) || (wanted && !wanted.has(id))) continue;
+      if (existing.has(id)) { if (wanted) imported.push(id); continue; }
+      const fm = `---\nname: ${oneLine(meta.name)}\ndescription: ${oneLine(meta.description).slice(0, 400)}\nrole: subagente\nsource: github.com/${repo}\n---\n\n`;
+      fs.writeFileSync(path.join(USER_AGENTS_DIR, `${id}.md`), fm + String(body).trim() + '\n');
+      existing.add(id);
+      imported.push(id);
+    }
+    return imported;
+  });
+}
+
+// Equipos predefinidos (library/teams.json): importa los agentes que falten y los ACTIVA.
+export function listTeams() {
+  try { return JSON.parse(fs.readFileSync(path.join(config.libraryDir, 'teams.json'), 'utf8')); } catch { return []; }
+}
+export async function installTeam(teamId) {
+  const team = listTeams().find((t) => t.id === teamId);
+  if (!team) throw new Error('Ese equipo no existe');
+  const ids = await importAgents(team.repo, team.path || '', team.agents);
+  for (const id of ids) if (!state.agents.includes(id)) state.agents.push(id);
+  for (const sk of team.skills || []) if (skillDirs().some((d) => d.id === sk) && !state.skills.includes(sk)) state.skills.push(sk);
+  saveState(state);
+  syncSkills();
+  const missing = team.agents.map(slug).filter((a) => !ids.includes(a));
+  return { team: team.name, enabled: ids, missing };
 }
 
 export const getAgent = (id) => listAgents().find((a) => a.id === id);

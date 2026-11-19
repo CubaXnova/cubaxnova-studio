@@ -86,12 +86,42 @@ $$('.bottomnav button').forEach((b) => b.addEventListener('click', () => {
 /* ---------------- Librería: agentes y skills ---------------- */
 async function loadLibrary() {
   library = await api('/library');
-  renderAgents(); renderSkills(); renderAgentSelect();
+  renderAgents(); renderSkills(); renderAgentSelect(); loadTeams();
+}
+let teams = [];
+async function loadTeams() {
+  if (!teams.length) teams = await api('/teams').catch(() => []);
+  const have = new Set(library.agents.filter((a) => a.enabled).map((a) => a.id));
+  $('#teams').innerHTML = teams.length ? `<div class="t-title">Equipos listos para usar</div>${teams.map((t) => {
+    const on = t.agents.every((a) => have.has(a));
+    return `<div class="team"><b>${esc(t.name)}</b>${on ? '<span class="badge ok">activo</span>'
+      : `<button class="btn small" data-team="${esc(t.id)}">Instalar</button>`}<div class="desc">${esc(t.description)}</div></div>`;
+  }).join('')}` : '';
+}
+$('#teams').addEventListener('click', async (e) => {
+  const id = e.target.dataset.team;
+  if (!id) return;
+  e.target.disabled = true; e.target.textContent = 'Instalando…';
+  try {
+    const r = await api(`/teams/${id}/install`, { method: 'POST' });
+    addNote(`👥 ${r.team} activo: ${r.enabled.join(', ')}${r.missing.length ? ` (no encontrados: ${r.missing.join(', ')})` : ''}. Abre un chat nuevo para usarlo.`);
+    loadLibrary();
+  } catch (err) { alert(err.message); e.target.disabled = false; e.target.textContent = 'Instalar'; }
+});
+$('#agentSearch').addEventListener('input', () => renderAgents());
+$('#skillSearch').addEventListener('input', () => renderSkills());
+const matches = (x, q) => !q || `${x.id} ${x.name} ${x.description}`.toLowerCase().includes(q);
+const MAX_LIST = 80;
+function renderList(sel, list, kind, q) {
+  const items = [...list].sort((a, b) => (b.enabled - a.enabled) || a.name.localeCompare(b.name)).filter((x) => matches(x, q));
+  $(sel).innerHTML = items.slice(0, MAX_LIST).map((x) => itemHTML(x, kind)).join('')
+    + (items.length > MAX_LIST ? `<li class="more">…y ${items.length - MAX_LIST} más. Usa el buscador.</li>` : '')
+    || '<p class="muted">Nada por aquí.</p>';
 }
 
 function itemHTML(x, kind) {
   const badge = kind === 'agent'
-    ? `<span class="badge ${x.role === 'principal' ? 'main' : ''}">${x.role}</span>`
+    ? `<span class="badge ${x.role === 'principal' ? 'main' : ''}">${x.role}</span>${x.source?.startsWith('github.com/') ? `<span class="badge">${esc(x.source.split('/')[1])}</span>` : ''}`
     : `<span class="badge">${esc(x.source.replace('github.com/', ''))}</span>`;
   return `<li class="item ${x.enabled ? '' : 'off'}">
     <div class="name">${esc(x.name)} ${badge}</div>
@@ -102,8 +132,8 @@ function itemHTML(x, kind) {
     <div class="desc">${esc(x.description)}</div>
   </li>`;
 }
-function renderAgents() { $('#agentList').innerHTML = library.agents.map((a) => itemHTML(a, 'agent')).join('') || '<p class="muted">No hay agentes.</p>'; }
-function renderSkills() { $('#skillList').innerHTML = [...library.skills].sort((a, b) => b.enabled - a.enabled).map((s) => itemHTML(s, 'skill')).join('') || '<p class="muted">No hay skills.</p>'; }
+function renderAgents() { renderList('#agentList', library.agents, 'agent', $('#agentSearch').value.trim().toLowerCase()); }
+function renderSkills() { renderList('#skillList', library.skills, 'skill', $('#skillSearch').value.trim().toLowerCase()); }
 function renderAgentSelect() {
   const enabled = library.agents.filter((a) => a.enabled);
   const mains = enabled.filter((a) => a.role === 'principal');
@@ -159,6 +189,23 @@ $('#importForm').addEventListener('submit', async (e) => {
     loadLibrary();
   } catch (err) { alert(err.message); }
   btn.disabled = false; btn.textContent = 'Importar (llegan desactivadas)';
+});
+
+$('#agentImportPreset').addEventListener('change', (e) => {
+  $$('#agentImportForm input').forEach((i) => i.classList.toggle('hidden', e.target.value !== 'custom'));
+});
+$('#agentImportForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const preset = $('#agentImportPreset').value;
+  const [repo, path] = preset === 'custom' ? [e.target.repo.value.trim(), e.target.path.value.trim()] : preset.split('|');
+  const btn = e.target.querySelector('button');
+  btn.disabled = true; btn.textContent = 'Importando… (puede tardar)';
+  try {
+    const r = await api('/agents/import', { method: 'POST', body: { repo, path } });
+    alert(r.imported.length ? `Importados ${r.imported.length} agentes (desactivados). Búscalos y activa los que quieras.` : 'No había agentes nuevos.');
+    loadLibrary();
+  } catch (err) { alert(err.message); }
+  btn.disabled = false; btn.textContent = 'Importar (llegan desactivados)';
 });
 
 /* ---------------- Chats guardados ---------------- */

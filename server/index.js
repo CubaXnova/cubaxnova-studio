@@ -51,6 +51,9 @@ for (const kind of ['agent', 'skill']) {
   api.delete(`/${kind}s/:id`, wrap((req) => { lib.remove(kind, req.params.id); return { ok: true }; }));
 }
 api.post('/skills/import', wrap(async (req) => ({ imported: await lib.importSkills(req.body?.repo, req.body?.path) })));
+api.post('/agents/import', wrap(async (req) => ({ imported: await lib.importAgents(req.body?.repo, req.body?.path) })));
+api.get('/teams', wrap(() => lib.listTeams()));
+api.post('/teams/:id/install', wrap((req) => lib.installTeam(req.params.id)));
 api.get('/chats', wrap(() => listChats()));
 api.get('/chats/:id', wrap((req) => loadChat(req.params.id) || { error: 'No existe' }));
 api.delete('/chats/:id', wrap((req) => { deleteChat(req.params.id); return { ok: true }; }));

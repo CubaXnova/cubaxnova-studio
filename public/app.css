@@ -207,3 +207,12 @@ textarea { resize: vertical; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .check input { width: auto; }
 #pushMsg.ok { color: var(--accent); } #pushMsg.bad { color: var(--danger); }
+
+/* Equipos y buscador */
+.search { padding: 7px 10px; }
+.teams { display: grid; gap: 6px; }
+.teams .t-title { font-size: 12px; color: var(--muted); }
+.team { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; background: linear-gradient(135deg, #12251d, #13203a); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px; }
+.team b { font-size: 13.5px; }
+.team .desc { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.items .more { color: var(--muted); font-size: 12px; text-align: center; padding: 6px; }

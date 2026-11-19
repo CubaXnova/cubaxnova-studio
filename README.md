@@ -12,6 +12,8 @@ Espacio de trabajo **de código abierto** para trabajar con inteligencia artific
 
 Además:
 - **Cola de tareas**: si Codex está ocupado, lo que envíes queda en fila y se hace después (sobrevive a reinicios). Ideal para dejar trabajo de noche.
+- **👥 Equipos de agentes** listos (Web, Laravel/PHP, App móvil) y **importador de agentes** de colecciones abiertas (VoltAgent, wshobson…), con buscador.
+- **👀 Verificación visual**: la skill `verificar-web` saca capturas en móvil y PC (Playwright) para que la IA vea y corrija sus diseños. Navegador propio: `sudo bash scripts/instalar-navegador.sh`.
 - **🧠 Dos cerebros**: Codex (OpenAI) o **Claude Code** (Anthropic), se cambia con un toque. Claude usa el Claude Code instalado en el servidor (`npm run claude-login` para darle sesión a Studio).
 - **↶ Deshacer**: antes y después de cada tarea se guarda una "foto" del workspace con git; un botón deshace los cambios de la última tarea.
 - **App en el móvil (PWA)**: se instala desde Chrome con *Añadir a pantalla de inicio*.

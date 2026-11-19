@@ -46,7 +46,24 @@
           <button class="tab" data-tab="files">Archivos</button>
         </nav>
         <section class="tabpane" id="tab-agents">
+          <div id="teams" class="teams"></div>
+          <input id="agentSearch" class="search" type="search" placeholder="🔍 Buscar agente…">
           <ul id="agentList" class="items"></ul>
+          <details class="form-box">
+            <summary>+ Importar agentes de código abierto</summary>
+            <form id="agentImportForm" class="stack">
+              <select id="agentImportPreset">
+                <option value="VoltAgent/awesome-claude-code-subagents|categories">VoltAgent (Claude) · ~180 agentes</option>
+                <option value="VoltAgent/awesome-codex-subagents|categories">VoltAgent (Codex) · ~175 agentes</option>
+                <option value="wshobson/agents|plugins">wshobson/agents · ~195 agentes</option>
+                <option value="custom">Otro repositorio…</option>
+              </select>
+              <input name="repo" placeholder="dueño/repo" class="hidden">
+              <input name="path" placeholder="subcarpeta (opcional)" class="hidden">
+              <button class="btn primary small">Importar (llegan desactivados)</button>
+              <p class="muted tiny">Licencias MIT. Activa solo los que necesites: cuantos más actives, más largo es el mensaje para el agente principal.</p>
+            </form>
+          </details>
           <details class="form-box">
             <summary>+ Nuevo agente</summary>
             <form id="agentForm" class="stack">
@@ -62,6 +79,7 @@
           </details>
         </section>
         <section class="tabpane hidden" id="tab-skills">
+          <input id="skillSearch" class="search" type="search" placeholder="🔍 Buscar skill…">
           <ul id="skillList" class="items"></ul>
           <details class="form-box">
             <summary>+ Importar skills de código abierto</summary>
