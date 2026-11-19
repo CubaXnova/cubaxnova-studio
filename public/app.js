@@ -60,12 +60,16 @@ $('#logout').addEventListener('click', async () => { await api('/logout', { meth
 $$('.tab').forEach((t) => t.addEventListener('click', () => {
   $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
   $$('.tabpane').forEach((p) => p.classList.toggle('hidden', p.id !== `tab-${t.dataset.tab}`));
-  if (t.dataset.tab === 'chats') loadChats();
+  if (t.dataset.tab === 'chats') { loadChats(); loadSettings(); }
+  if (t.dataset.tab === 'files') loadFiles(currentDir);
 }));
+const openTab = (name) => $(`.tab[data-tab="${name}"]`).click();
 $$('.bottomnav button').forEach((b) => b.addEventListener('click', () => {
   $('.layout').dataset.view = b.dataset.view;
   $$('.bottomnav button').forEach((x) => x.classList.toggle('active', x === b));
   if (b.dataset.view === 'terminal') setTimeout(fitTerm, 50);
+  if (b.dataset.view === 'files') openTab('files');
+  if (b.dataset.view === 'library' && $('.tab.active')?.dataset.tab === 'files') openTab('agents');
 }));
 
 /* ---------------- Librería: agentes y skills ---------------- */
@@ -164,9 +168,9 @@ $('#chatList').addEventListener('click', async (e) => {
     return loadChats();
   }
   const li = e.target.closest('[data-open]');
-  if (li) { await openChat(li.dataset.open); loadChats(); $$('.bottomnav button')[1].click(); }
+  if (li) { await openChat(li.dataset.open); loadChats(); $('.bottomnav [data-view="chat"]').click(); }
 });
-$('#newChat').addEventListener('click', () => { newChat(); loadChats(); $$('.bottomnav button')[1].click(); });
+$('#newChat').addEventListener('click', () => { newChat(); loadChats(); $('.bottomnav [data-view="chat"]').click(); });
 
 function newChat() {
   chatId = null; store.set('chatId', null); setBusy(false);
@@ -238,6 +242,8 @@ function connectChat() {
   ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', chatId }));
   ws.onmessage = (e) => {
     const ev = JSON.parse(e.data);
+    if (ev.type === 'queue') { renderQueue(ev.items, ev.running); return; }
+    if (ev.type === 'queued') { pendingSend = false; addNote(`⏳ En cola (posición ${ev.position}). Empezará cuando termine la tarea actual.`); return; }
     if (ev.type === 'chat') {
       if (!pendingSend) return;
       pendingSend = false; chatId = ev.chatId; store.set('chatId', chatId); return;
@@ -255,7 +261,7 @@ function connectChat() {
 }
 function setBusy(v) {
   busy = v;
-  $('#send').classList.toggle('hidden', v);
+  // Enviar sigue visible: si hay una tarea en marcha, el mensaje va a la cola.
   $('#stop').classList.toggle('hidden', !v);
   if (!v) thinkingEl.remove();
 }
@@ -268,7 +274,7 @@ input.addEventListener('keydown', (e) => {
 $('#composer').addEventListener('submit', (e) => {
   e.preventDefault();
   const text = input.value.trim();
-  if (!text || busy || ws?.readyState !== 1) return;
+  if (!text || ws?.readyState !== 1) return;
   addMsg('user', 'Tú', text);
   pendingSend = true;
   ws.send(JSON.stringify({ type: 'send', text, chatId, agent: $('#agentSelect').value }));
@@ -276,6 +282,91 @@ $('#composer').addEventListener('submit', (e) => {
   setBusy(true);
 });
 $('#stop').addEventListener('click', () => ws?.send(JSON.stringify({ type: 'stop' })));
+
+/* ---------------- Cola de tareas ---------------- */
+function addNote(text) {
+  clearEmpty();
+  const el = document.createElement('div');
+  el.className = 'delegation';
+  el.textContent = text;
+  box.appendChild(el); scroll();
+}
+function renderQueue(items, running) {
+  const q = $('#queueBox');
+  if (!items.length) { q.classList.add('hidden'); q.innerHTML = ''; }
+  else {
+    q.classList.remove('hidden');
+    q.innerHTML = `<div class="q-title">Cola: ${items.length} tarea${items.length > 1 ? 's' : ''} esperando${running ? ` · ahora: <span class="q-run">${esc(running.title)}</span>` : ''}</div>`
+      + items.map((it, i) => `<div class="q-item"><b>${i + 1}.</b><span title="${esc(it.text)}">${esc(it.text)}</span>
+        <button class="icon-btn" data-unqueue="${esc(it.id)}" title="Quitar de la cola">✕</button></div>`).join('');
+  }
+  $('#send').textContent = running ? 'A la cola' : 'Enviar';
+  $('#send').classList.remove('hidden');
+}
+$('#queueBox').addEventListener('click', (e) => {
+  const id = e.target.dataset.unqueue;
+  if (id && ws?.readyState === 1) ws.send(JSON.stringify({ type: 'unqueue', id }));
+});
+
+/* ---------------- Avisos por Telegram ---------------- */
+function tgMsg(text, ok) { const el = $('#tgMsg'); el.textContent = text; el.className = `tiny ${ok ? 'ok' : 'bad'}`; }
+async function loadSettings() {
+  const st = await api('/settings').catch(() => null);
+  if (!st) return;
+  $('#tgState').textContent = st.telegramConfigured ? 'activo' : 'sin configurar';
+  $('#tgState').classList.toggle('ok', st.telegramConfigured);
+  $('#tgToken').placeholder = st.telegramToken || 'Token del bot (123456:ABC…)';
+  $('#tgMode').value = st.notifyOn;
+}
+$('#tgSave').addEventListener('click', async () => {
+  try { await api('/settings', { method: 'POST', body: { telegramToken: $('#tgToken').value.trim() } }); $('#tgToken').value = ''; tgMsg('Token guardado. Ahora escríbele "hola" a tu bot y pulsa Detectar.', true); loadSettings(); }
+  catch (err) { tgMsg(err.message); }
+});
+$('#tgDetect').addEventListener('click', async () => {
+  try { const r = await api('/telegram/detect', { method: 'POST' }); tgMsg(`Chat detectado${r.name ? `: ${r.name}` : ''}. Pulsa Enviar prueba.`, true); loadSettings(); }
+  catch (err) { tgMsg(err.message); }
+});
+$('#tgTest').addEventListener('click', async () => {
+  try { await api('/telegram/test', { method: 'POST' }); tgMsg('Mensaje enviado. Mira tu Telegram.', true); }
+  catch (err) { tgMsg(err.message); }
+});
+$('#tgMode').addEventListener('change', async (e) => {
+  try { await api('/settings', { method: 'POST', body: { notifyOn: e.target.value } }); tgMsg('Guardado.', true); } catch (err) { tgMsg(err.message); }
+});
+
+/* ---------------- Archivos (galería) ---------------- */
+let currentDir = store.get('filesDir') || '';
+const fileUrl = (p, dl) => `/api/files?path=${encodeURIComponent(p)}${dl ? '&download=1' : ''}`;
+const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+async function loadFiles(dir = '') {
+  let data;
+  try { data = await api(`/files?path=${encodeURIComponent(dir || '.')}`); }
+  catch { if (dir) return loadFiles(''); return; }
+  if (!data.entries) return;
+  currentDir = data.dir; store.set('filesDir', currentDir);
+  const parts = currentDir ? currentDir.split('/') : [];
+  $('#crumbs').innerHTML = `<button data-dir="">workspace</button>` + parts.map((p, i) =>
+    `<span>/</span><button data-dir="${esc(parts.slice(0, i + 1).join('/'))}">${esc(p)}</button>`).join('');
+  const rel = (n) => (currentDir ? `${currentDir}/${n}` : n);
+  $('#fileGrid').innerHTML = data.entries.map((f) => {
+    if (f.dir) return `<div class="fcard" data-dir="${esc(rel(f.name))}"><div class="thumb">📁</div><div class="fname">${esc(f.name)}</div></div>`;
+    const img = IMG_RE.test(f.name);
+    const small = img && /_(micro|small)\./i.test(f.name);
+    return `<div class="fcard" data-open="${esc(rel(f.name))}">
+      <div class="thumb ${small ? 'small' : ''}">${img ? `<img loading="lazy" src="${fileUrl(rel(f.name))}" alt="">` : '📄'}</div>
+      <div class="fname" title="${esc(f.name)}">${esc(f.name)}</div>
+      <div class="fmeta"><span>${kb(f.size)}</span><a href="${fileUrl(rel(f.name), 1)}" download title="Descargar">⬇</a></div></div>`;
+  }).join('') || '<p class="file-empty">Carpeta vacía.</p>';
+}
+$('#crumbs').addEventListener('click', (e) => { if (e.target.dataset.dir !== undefined) loadFiles(e.target.dataset.dir); });
+$('#fileGrid').addEventListener('click', (e) => {
+  if (e.target.closest('a')) return; // descarga
+  const card = e.target.closest('.fcard');
+  if (!card) return;
+  if (card.dataset.dir !== undefined) loadFiles(card.dataset.dir);
+  else window.open(fileUrl(card.dataset.open), '_blank');
+});
+$('#filesReload').addEventListener('click', () => loadFiles(currentDir));
 
 /* ---------------- Terminal ---------------- */
 let term; let fit; let tws;

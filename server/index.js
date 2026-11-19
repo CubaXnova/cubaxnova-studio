@@ -10,6 +10,8 @@ import { login, logout, requireAuth, isAuthed } from './auth.js';
 import * as lib from './library.js';
 import { sendMessage, listChats, loadChat, deleteChat, codexEnv } from './codex.js';
 import { attachTerminal } from './terminal.js';
+import crypto from 'node:crypto';
+import * as notify from './notify.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -60,17 +62,40 @@ api.get('/files', (req, res) => {
     const full = fs.realpathSync(path.resolve(base, p));
     if (full !== base && !full.startsWith(base + path.sep)) return res.status(403).json({ error: 'Solo se pueden ver archivos del directorio de trabajo' });
     const st = fs.statSync(full);
-    if (st.isDirectory()) return res.json({ dir: path.relative(base, full), entries: fs.readdirSync(full, { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })) });
+    if (st.isDirectory()) {
+      const entries = fs.readdirSync(full, { withFileTypes: true })
+        .filter((e) => !e.name.startsWith('.'))
+        .map((e) => {
+          let size = 0; let mtime = 0;
+          try { const s2 = fs.statSync(path.join(full, e.name)); size = s2.size; mtime = s2.mtimeMs; } catch { /* enlace roto */ }
+          return { name: e.name, dir: e.isDirectory(), size, mtime };
+        })
+        .sort((a, b) => (b.dir - a.dir) || a.name.localeCompare(b.name));
+      return res.json({ dir: path.relative(base, full), entries });
+    }
     const ext = path.extname(full).slice(1).toLowerCase();
     res.setHeader('Content-Type', MIME[ext] || (st.size < 2_000_000 ? 'text/plain; charset=utf-8' : 'application/octet-stream'));
     // Los SVG pueden llevar scripts: se sirven sin permiso para ejecutar nada.
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self'");
     res.setHeader('Cache-Control', 'no-store');
+    if (req.query.download) res.setHeader('Content-Disposition', `attachment; filename="${path.basename(full).replace(/[^\w.\-]/g, '_')}"`);
     fs.createReadStream(full).pipe(res);
   } catch {
     res.status(404).json({ error: 'No encontrado' });
   }
 });
+
+// Ajustes y avisos por Telegram
+api.get('/settings', wrap(() => notify.publicSettings()));
+api.post('/settings', wrap((req) => {
+  const b = req.body || {};
+  if (b.telegramToken) notify.setToken(b.telegramToken);
+  if (b.notifyOn && ['all', 'errors', 'off'].includes(b.notifyOn)) notify.saveSettings({ notifyOn: b.notifyOn });
+  if (b.clearTelegram) notify.saveSettings({ telegramToken: '', telegramChatId: '' });
+  return notify.publicSettings();
+}));
+api.post('/telegram/detect', wrap(() => notify.detectChat()));
+api.post('/telegram/test', wrap(async () => { await notify.sendTelegram('👋 Hola desde CubaXnova Studio. Los avisos funcionan.'); return { ok: true }; }));
 
 api.get('/status', wrap(() => new Promise((resolve) => {
   const bin = config.codexBin || path.join(ROOT, 'node_modules', '.bin', 'codex');
@@ -102,12 +127,18 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 // El trabajo de Codex vive en el servidor, NO en la conexión: si el móvil se bloquea o se corta el túnel,
-// la tarea sigue y al volver se reengancha. Se ejecuta una tarea a la vez.
+// la tarea sigue y al volver se reengancha. Se ejecuta una tarea a la vez; las demás esperan en la COLA,
+// que se guarda en disco y sobrevive a reinicios.
 const chatClients = new Set();
-let job = null; // { chatId, controller, live: [] }
+let job = null; // { chatId, title, controller, live: [], lastText, error }
+const QUEUE_FILE = path.join(config.dataDir, 'queue.json');
+let queue = [];
+try { queue = JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8')); } catch { queue = []; }
+const saveQueue = () => fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue, null, 1));
+const queueView = () => queue.map((q) => ({ id: q.id, chatId: q.chatId || null, text: q.text.slice(0, 120) }));
 
 function broadcast(ev) {
-  if (job && ev.type !== 'chat') ev.chatId = ev.chatId || job.chatId;
+  if (job && !['chat', 'queue'].includes(ev.type)) ev.chatId = ev.chatId || job.chatId;
   // Guardamos lo que va pasando en el turno actual para enseñarlo a quien se conecte a mitad.
   if (job) {
     if (ev.type === 'message') job.live = [];
@@ -116,31 +147,56 @@ function broadcast(ev) {
   const data = JSON.stringify(ev);
   for (const c of chatClients) if (c.readyState === 1) c.send(data);
 }
+const broadcastQueue = () => broadcast({ type: 'queue', items: queueView(), running: job ? { chatId: job.chatId, title: job.title } : null });
+
+function enqueue(msg) {
+  queue.push({ id: crypto.randomUUID(), chatId: msg.chatId || null, text: String(msg.text).trim(), agent: msg.agent || null, at: Date.now() });
+  saveQueue();
+  broadcastQueue();
+  runNext();
+}
+
+function runNext() {
+  if (job || !queue.length) return;
+  const next = queue.shift();
+  saveQueue();
+  runJob(next);
+}
 
 async function runJob(msg) {
-  job = { chatId: msg.chatId || null, controller: new AbortController(), live: [] };
+  job = { chatId: msg.chatId || null, title: msg.text.slice(0, 60), controller: new AbortController(), live: [], lastText: '', error: null };
+  broadcastQueue();
   const emit = (ev) => {
-    if (ev.type === 'chat') job.chatId = ev.chatId;
+    if (ev.type === 'chat') { job.chatId = ev.chatId; job.title = ev.title || job.title; }
+    if (ev.type === 'message' && !ev.sub && ev.text) job.lastText = ev.text;
+    if (ev.type === 'error') job.error = ev.text;
     broadcast(ev);
   };
   try {
-    await sendMessage({ chatId: msg.chatId, text: String(msg.text).trim(), agentId: msg.agent, emit, signal: job.controller.signal });
+    await sendMessage({ chatId: msg.chatId, text: msg.text, agentId: msg.agent, emit, signal: job.controller.signal });
   } catch (e) {
     emit({ type: 'error', text: e.message });
   } finally {
-    const chatId = job.chatId;
+    const done = job;
     job = null;
-    broadcast({ type: 'idle', chatId });
+    broadcast({ type: 'idle', chatId: done.chatId });
+    if (done.error !== 'Detenido') {
+      notify.notifyTask({ title: done.title, ok: !done.error, text: done.error || done.lastText, queued: queue.length });
+    }
+    broadcastQueue();
+    setTimeout(runNext, 1000);
   }
 }
 
 function handleChat(ws) {
   chatClients.add(ws);
   const send = (ev) => { if (ws.readyState === 1) ws.send(JSON.stringify(ev)); };
+  send({ type: 'queue', items: queueView(), running: job ? { chatId: job.chatId, title: job.title } : null });
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'stop') { job?.controller.abort(); return; }
+    if (msg.type === 'unqueue') { queue = queue.filter((q) => q.id !== msg.id); saveQueue(); broadcastQueue(); return; }
     if (msg.type === 'attach') {
       // Al (re)conectar: si hay una tarea en marcha en este chat, se reenvía su estado.
       if (job && job.chatId && job.chatId === msg.chatId) {
@@ -150,11 +206,17 @@ function handleChat(ws) {
       return;
     }
     if (msg.type !== 'send' || !String(msg.text || '').trim()) return;
-    if (job) return send({ type: 'error', chatId: msg.chatId, text: 'Ya hay una tarea en marcha. Espera a que termine o pulsa Detener.' });
-    runJob(msg);
+    if (job) {
+      if (queue.length >= 50) return send({ type: 'error', chatId: msg.chatId, text: 'La cola está llena (50 tareas).' });
+      send({ type: 'queued', chatId: msg.chatId || null, position: queue.length + 1 });
+    }
+    enqueue(msg);
   });
   ws.on('close', () => chatClients.delete(ws)); // cerrar la página ya NO cancela la tarea
 }
+
+// Si quedaron tareas en la cola (p. ej. tras actualizar Studio), se retoman solas.
+setTimeout(runNext, 3000);
 
 if (!config.password) console.warn('⚠  Define STUDIO_PASSWORD en .env antes de usarlo.');
 server.listen(config.port, config.host, () => {

@@ -37,6 +37,7 @@
           <button class="tab active" data-tab="agents">Agentes</button>
           <button class="tab" data-tab="skills">Skills</button>
           <button class="tab" data-tab="chats">Chats</button>
+          <button class="tab" data-tab="files">Archivos</button>
         </nav>
         <section class="tabpane" id="tab-agents">
           <ul id="agentList" class="items"></ul>
@@ -83,6 +84,32 @@
         <section class="tabpane hidden" id="tab-chats">
           <button id="newChat" class="btn primary small full">+ Chat nuevo</button>
           <ul id="chatList" class="items"></ul>
+          <details class="form-box" id="tgBox">
+            <summary>🔔 Avisos por Telegram <span id="tgState" class="badge">sin configurar</span></summary>
+            <div class="stack">
+              <p class="muted tiny">Te llega un mensaje al terminar (o fallar) cada tarea.</p>
+              <ol class="muted tiny steps">
+                <li>En Telegram abre <b>@BotFather</b>, escribe <code>/newbot</code> y sigue los pasos.</li>
+                <li>Copia el <b>token</b> que te da y pégalo aquí.</li>
+                <li>Escríbele <b>hola</b> a tu bot nuevo y pulsa <b>Detectar mi chat</b>.</li>
+              </ol>
+              <input id="tgToken" placeholder="Token del bot (123456:ABC…)" autocomplete="off">
+              <button id="tgSave" class="btn small" type="button">1. Guardar token</button>
+              <button id="tgDetect" class="btn small" type="button">2. Detectar mi chat</button>
+              <button id="tgTest" class="btn small" type="button">3. Enviar prueba</button>
+              <label class="muted tiny">Avisarme de
+                <select id="tgMode"><option value="all">todas las tareas</option><option value="errors">solo errores</option><option value="off">nada (desactivado)</option></select>
+              </label>
+              <p id="tgMsg" class="tiny"></p>
+            </div>
+          </details>
+        </section>
+        <section class="tabpane hidden" id="tab-files">
+          <div class="files-head">
+            <div id="crumbs" class="crumbs"></div>
+            <button id="filesReload" class="btn ghost small" title="Recargar">↻</button>
+          </div>
+          <div id="fileGrid" class="file-grid"></div>
         </section>
       </aside>
 
@@ -94,6 +121,7 @@
             <p class="muted">El agente principal reparte el trabajo entre los subagentes activos. Tú das las indicaciones.</p>
           </div>
         </div>
+        <div id="queueBox" class="queue hidden"></div>
         <form id="composer" class="composer">
           <textarea id="input" rows="1" placeholder="Escribe una indicación…"></textarea>
           <button id="send" class="btn primary" type="submit">Enviar</button>
@@ -120,6 +148,7 @@
       <button data-view="library">Agentes</button>
       <button data-view="chat" class="active">Chat</button>
       <button data-view="terminal">Terminal</button>
+      <button data-view="files">Archivos</button>
     </nav>
   </div>
 

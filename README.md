@@ -8,7 +8,14 @@ Espacio de trabajo **de código abierto** para trabajar con inteligencia artific
 | **Agentes y Skills** | Activas, desactivas, creas o borras **agentes**, **subagentes** y **skills** con un interruptor. Puedes importar skills de código abierto desde GitHub. |
 | **Terminal** | Terminal real de tu servidor (VPS) en el navegador. Sobrevive a desconexiones: ideal desde el móvil. |
 
-En el ordenador ves los tres paneles a la vez; en el móvil cambias entre ellos con la barra de abajo.
+| **Archivos** | Galería del directorio de trabajo: carpetas, miniaturas de imágenes, abrir y descargar. |
+
+Además:
+- **Cola de tareas**: si Codex está ocupado, lo que envíes queda en fila y se hace después (sobrevive a reinicios). Ideal para dejar trabajo de noche.
+- **Avisos por Telegram** al terminar o fallar cada tarea (se configura en *Chats → Avisos por Telegram*).
+- Las tareas **siguen en el servidor** aunque cierres la página o se corte la conexión.
+
+En el ordenador ves los paneles a la vez; en el móvil cambias entre ellos con la barra de abajo.
 
 ## Cómo funcionan los subagentes
 
