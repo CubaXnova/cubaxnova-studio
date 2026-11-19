@@ -1,5 +1,6 @@
 // CubaXnova Studio — servidor principal.
 import http from 'node:http';
+import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import express from 'express';
@@ -49,6 +50,28 @@ api.post('/skills/import', wrap(async (req) => ({ imported: await lib.importSkil
 api.get('/chats', wrap(() => listChats()));
 api.get('/chats/:id', wrap((req) => loadChat(req.params.id) || { error: 'No existe' }));
 api.delete('/chats/:id', wrap((req) => { deleteChat(req.params.id); return { ok: true }; }));
+// Ver archivos del directorio de trabajo (imágenes, código...). Solo dentro del workspace.
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml',
+  pdf: 'application/pdf', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' };
+api.get('/files', (req, res) => {
+  try {
+    let p = decodeURIComponent(String(req.query.path || '')).replace(/^file:\/\//, '').split('#')[0];
+    const base = fs.realpathSync(config.workspaceDir);
+    const full = fs.realpathSync(path.resolve(base, p));
+    if (full !== base && !full.startsWith(base + path.sep)) return res.status(403).json({ error: 'Solo se pueden ver archivos del directorio de trabajo' });
+    const st = fs.statSync(full);
+    if (st.isDirectory()) return res.json({ dir: path.relative(base, full), entries: fs.readdirSync(full, { withFileTypes: true }).map((e) => ({ name: e.name, dir: e.isDirectory() })) });
+    const ext = path.extname(full).slice(1).toLowerCase();
+    res.setHeader('Content-Type', MIME[ext] || (st.size < 2_000_000 ? 'text/plain; charset=utf-8' : 'application/octet-stream'));
+    // Los SVG pueden llevar scripts: se sirven sin permiso para ejecutar nada.
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self'");
+    res.setHeader('Cache-Control', 'no-store');
+    fs.createReadStream(full).pipe(res);
+  } catch {
+    res.status(404).json({ error: 'No encontrado' });
+  }
+});
+
 api.get('/status', wrap(() => new Promise((resolve) => {
   const bin = config.codexBin || path.join(ROOT, 'node_modules', '.bin', 'codex');
   const p = spawn(bin, ['login', 'status'], { env: codexEnv() });

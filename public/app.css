@@ -85,6 +85,8 @@ textarea { resize: vertical; }
 .msg.sub .body { border-left: 3px solid var(--accent2); }
 .msg.err .body { border-color: var(--danger); color: #ffc2c8; }
 .body p { margin: .4em 0; } .body pre { background: var(--bg); padding: 10px; border-radius: 8px; overflow: auto; }
+.body img.preview, .body img { display: block; max-width: min(100%, 360px); margin: 10px 0; border-radius: 8px; background: repeating-conic-gradient(#222 0 25%, #2c2c2c 0 50%) 0 0 / 16px 16px; }
+.body a { color: var(--accent2); }
 .body code { font-family: var(--mono); font-size: 12.5px; }
 .delegation { align-self: center; max-width: 860px; width: 100%; font-size: 13px; color: var(--muted); border: 1px dashed var(--accent2); border-radius: var(--radius); padding: 8px 12px; }
 .delegation b { color: var(--accent2); }

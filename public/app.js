@@ -6,7 +6,29 @@ const store = {
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } },
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const md = (s) => DOMPurify.sanitize(marked.parse(String(s ?? '')));
+const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+// Convierte los enlaces a archivos locales en enlaces que abren el archivo, y muestra las imágenes dentro del chat.
+function md(s) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = DOMPurify.sanitize(marked.parse(String(s ?? '')));
+  for (const a of tpl.content.querySelectorAll('a[href]')) {
+    const href = a.getAttribute('href');
+    if (/^(https?:|mailto:)/i.test(href)) { a.target = '_blank'; a.rel = 'noopener'; continue; }
+    const url = `/api/files?path=${encodeURIComponent(href)}`;
+    a.href = url; a.target = '_blank';
+    if (IMG_RE.test(href.split('#')[0])) {
+      const img = document.createElement('img');
+      img.src = url; img.className = 'preview'; img.alt = href;
+      img.onerror = () => img.remove();
+      a.after(img);
+    }
+  }
+  for (const img of tpl.content.querySelectorAll('img[src]')) {
+    const src = img.getAttribute('src');
+    if (!/^(https?:|data:|\/api\/files)/i.test(src)) img.src = `/api/files?path=${encodeURIComponent(src)}`;
+  }
+  return tpl.innerHTML;
+}
 
 async function api(path, opts = {}) {
   const res = await fetch(`/api${path}`, {
