@@ -45,3 +45,9 @@ tamaños (p. ej. `battleship_micro.jpg` 28×28 y `battleship_small.jpg` 40×40).
    - redimensiona con buen filtro (LANCZOS) y, para iconos ≤ 64 px, aumenta un poco el contraste para que se lea bien.
 4. Trabaja por **tandas de 5 objetos** y anota cada uno en `arte/progreso.md` (objeto → maestra → archivos derivados → ✅/❌).
 5. Al terminar la tanda, muestra en el chat las maestras con enlaces markdown y espera el visto bueno antes de seguir.
+
+## Lecciones aprendidas (evita estos errores)
+- imagegen ya guarda cada imagen en `$CODEX_HOME/generated_images/`: **copia el PNG desde ahí**. NUNCA pases la imagen
+  en Base64 dentro de un comando (falla con "Argument list too long").
+- Antes de copiar o guardar, crea las carpetas: `mkdir -p arte/maestras/<carpeta> arte/nuevas/<carpeta>`.
+
