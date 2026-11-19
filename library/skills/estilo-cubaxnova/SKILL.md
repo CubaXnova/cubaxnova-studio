@@ -6,9 +6,12 @@ license: MIT
 
 # Estilo visual CubaXnova
 
-## Imagen de referencia (la "nave madre" del estilo)
-`arte/naves/nave-combate-ligera.png` (dentro del directorio de trabajo).
-Pásala SIEMPRE como imagen de referencia a imagegen y pide "mismo estilo, misma paleta, misma luz".
+## Imagen de referencia (SOLO para el estilo, NUNCA para la forma)
+`arte/naves/nave-combate-ligera.png` (dentro del directorio de trabajo) define **colores, materiales, luces y acabado**.
+- Si se la pasas a imagegen, di SIEMPRE: "usa esta imagen solo para paleta, materiales e iluminación; la forma y la silueta
+  deben ser COMPLETAMENTE distintas: <silueta de la tabla>".
+- Si aun así sale parecida a la referencia u otra nave, vuelve a generar **sin** la imagen de referencia, describiendo el
+  estilo solo con texto (sección "Reglas del estilo").
 
 ## Reglas del estilo
 - **Tipo**: ilustración sci-fi semirrealista, muy detallada, acabado limpio tipo videojuego (no foto, no cartoon, no pixel art).
@@ -23,6 +26,37 @@ Pásala SIEMPRE como imagen de referencia a imagegen y pide "mismo estilo, misma
   - Investigaciones: objeto/tecnología simbólica (reactor, chip, escudo...) con brillo cian.
   - Planetas: esfera con atmósfera tenue, sin fondo.
   - Recursos (metal, cristal, deuterio, energía): icono-objeto simple, legible a 64×64.
+
+## Cada objeto, una silueta propia (OBLIGATORIO)
+Antes de generar, escribe en el prompt la silueta del objeto. Ningún objeto puede parecerse a otro. Guía:
+
+| Objeto (archivo) | Silueta y rasgos que lo distinguen |
+|---|---|
+| light_fighter | Caza pequeño y ágil, alas en flecha, 2 cañones, una cabina (es la nave de referencia) |
+| heavy_fighter | Caza más grande y blindado, alas cortas y gruesas, 4 cañones, doble motor |
+| cruiser | Nave mediana ancha y compacta, casco en cuña con torretas giratorias encima, sin alas de caza |
+| battleship | Nave de guerra grande y alargada, casco tipo acorazado con varias filas de torretas pesadas |
+| battlecruiser | Larga y estilizada, proa muy afilada, un gran cañón de energía central a lo largo del casco |
+| bomber | Ancha y pesada, alas anchas tipo bombardero, bodega de bombas visible abajo, 4 motores |
+| destroyer | Gigante tipo dreadnought, casco larguísimo y estrecho, muchas torretas, motores enormes |
+| deathstar | Estación esférica colosal, del tamaño de una luna, con un plato-arma gigante |
+| small_cargo | Transporte pequeño y cuadrado, cabina delante y un contenedor de carga detrás |
+| large_cargo | Carguero grande con varios contenedores encadenados y grúas |
+| colony_ship | Nave voluminosa con cúpulas de hábitat transparentes y módulos de colonos |
+| recycler | Nave con brazos mecánicos y pinzas de recolección, tolva para escombros |
+| espionage_probe | Sonda diminuta, cuerpo esférico con antenas y sensores, sin cabina |
+| solar_satellite | Satélite con grandes paneles solares desplegados, sin motores grandes |
+| crawler | Vehículo de superficie con orugas y taladros, no vuela |
+| reaper | Nave agresiva con garras/cuchillas delanteras, perfil de depredador |
+| pathfinder | Explorador alargado y ligero, con escáneres y antena larga |
+| missiles / defensas | Torretas y lanzadores sobre plataforma fija (lanzacohetes, láser, gauss, iones, plasma); cúpulas de escudo semitransparentes |
+
+Para objetos que no estén en la tabla, inventa una silueta basada en su función y anótala en `arte/progreso.md`.
+
+## Comprobación antes de mostrar (OBLIGATORIO)
+1. Cada maestra debe salir de una llamada NUEVA a imagegen (nunca copiar ni editar otra maestra).
+2. Compara con todas las maestras existentes: si el hash (`sha256sum`) coincide o la silueta se parece, **regénerala**.
+3. En el mensaje final, para cada maestra di en una línea qué la distingue de las demás.
 
 ## Prohibido
 - Copiar o imitar el arte del OGame original ni de otros juegos o películas.
