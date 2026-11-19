@@ -101,26 +101,59 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 
+// El trabajo de Codex vive en el servidor, NO en la conexión: si el móvil se bloquea o se corta el túnel,
+// la tarea sigue y al volver se reengancha. Se ejecuta una tarea a la vez.
+const chatClients = new Set();
+let job = null; // { chatId, controller, live: [] }
+
+function broadcast(ev) {
+  if (job && ev.type !== 'chat') ev.chatId = ev.chatId || job.chatId;
+  // Guardamos lo que va pasando en el turno actual para enseñarlo a quien se conecte a mitad.
+  if (job) {
+    if (ev.type === 'message') job.live = [];
+    else if (['turn', 'item', 'delegation'].includes(ev.type)) { job.live.push(ev); if (job.live.length > 300) job.live.shift(); }
+  }
+  const data = JSON.stringify(ev);
+  for (const c of chatClients) if (c.readyState === 1) c.send(data);
+}
+
+async function runJob(msg) {
+  job = { chatId: msg.chatId || null, controller: new AbortController(), live: [] };
+  const emit = (ev) => {
+    if (ev.type === 'chat') job.chatId = ev.chatId;
+    broadcast(ev);
+  };
+  try {
+    await sendMessage({ chatId: msg.chatId, text: String(msg.text).trim(), agentId: msg.agent, emit, signal: job.controller.signal });
+  } catch (e) {
+    emit({ type: 'error', text: e.message });
+  } finally {
+    const chatId = job.chatId;
+    job = null;
+    broadcast({ type: 'idle', chatId });
+  }
+}
+
 function handleChat(ws) {
-  let controller = null;
-  const emit = (ev) => { if (ws.readyState === 1) ws.send(JSON.stringify(ev)); };
-  ws.on('message', async (raw) => {
+  chatClients.add(ws);
+  const send = (ev) => { if (ws.readyState === 1) ws.send(JSON.stringify(ev)); };
+  ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (msg.type === 'stop') { controller?.abort(); return; }
-    if (msg.type !== 'send' || !String(msg.text || '').trim()) return;
-    if (controller) return emit({ type: 'error', text: 'Espera a que termine la respuesta actual (o pulsa Detener).' });
-    controller = new AbortController();
-    try {
-      await sendMessage({ chatId: msg.chatId, text: String(msg.text).trim(), agentId: msg.agent, emit, signal: controller.signal });
-    } catch (e) {
-      emit({ type: 'error', text: e.message });
-    } finally {
-      controller = null;
-      emit({ type: 'idle' });
+    if (msg.type === 'stop') { job?.controller.abort(); return; }
+    if (msg.type === 'attach') {
+      // Al (re)conectar: si hay una tarea en marcha en este chat, se reenvía su estado.
+      if (job && job.chatId && job.chatId === msg.chatId) {
+        send({ type: 'running', chatId: job.chatId });
+        for (const ev of job.live) send(ev);
+      } else send({ type: 'idle', chatId: msg.chatId || null, quiet: true });
+      return;
     }
+    if (msg.type !== 'send' || !String(msg.text || '').trim()) return;
+    if (job) return send({ type: 'error', chatId: msg.chatId, text: 'Ya hay una tarea en marcha. Espera a que termine o pulsa Detener.' });
+    runJob(msg);
   });
-  ws.on('close', () => controller?.abort());
+  ws.on('close', () => chatClients.delete(ws)); // cerrar la página ya NO cancela la tarea
 }
 
 if (!config.password) console.warn('⚠  Define STUDIO_PASSWORD en .env antes de usarlo.');

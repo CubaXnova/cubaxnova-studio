@@ -169,13 +169,15 @@ $('#chatList').addEventListener('click', async (e) => {
 $('#newChat').addEventListener('click', () => { newChat(); loadChats(); $$('.bottomnav button')[1].click(); });
 
 function newChat() {
-  chatId = null; store.set('chatId', null);
+  chatId = null; store.set('chatId', null); setBusy(false);
   $('#messages').innerHTML = `<div class="empty"><h2>¿En qué trabajamos hoy?</h2><p class="muted">El agente principal reparte el trabajo entre los subagentes activos. Tú das las indicaciones.</p></div>`;
 }
 async function openChat(id) {
   const c = await api(`/chats/${id}`).catch(() => null);
   if (!c || !c.messages) return newChat();
   chatId = c.id; store.set('chatId', chatId);
+  setBusy(false);
+  if (ws?.readyState === 1) ws.send(JSON.stringify({ type: 'attach', chatId }));
   $('#messages').innerHTML = '';
   const name = (id2) => library.agents.find((a) => a.id === id2)?.name || id2;
   for (const m of c.messages) {
@@ -230,11 +232,18 @@ function showItem(agent, it) {
 const thinkingEl = Object.assign(document.createElement('div'), { className: 'thinking', textContent: 'Trabajando' });
 
 let ws;
+let pendingSend = false;
 function connectChat() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/chat`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', chatId }));
   ws.onmessage = (e) => {
     const ev = JSON.parse(e.data);
-    if (ev.type === 'chat') { chatId = ev.chatId; store.set('chatId', chatId); }
+    if (ev.type === 'chat') {
+      if (!pendingSend) return;
+      pendingSend = false; chatId = ev.chatId; store.set('chatId', chatId); return;
+    }
+    if (ev.chatId && ev.chatId !== chatId) return; // es de otro chat
+    if (ev.type === 'running') { setBusy(true); thinkingEl.textContent = 'Trabajando (sigue en el servidor)'; box.appendChild(thinkingEl); scroll(); }
     else if (ev.type === 'turn') { activity = null; items.clear(); thinkingEl.textContent = `${ev.name} trabajando`; box.appendChild(thinkingEl); scroll(); }
     else if (ev.type === 'item') showItem(ev.agent, ev.item);
     else if (ev.type === 'message') { if (ev.text) addMsg(ev.sub ? 'sub' : '', ev.name, ev.text); activity = null; }
@@ -242,7 +251,7 @@ function connectChat() {
     else if (ev.type === 'error') addMsg('err', 'Error', ev.text);
     else if (ev.type === 'idle') setBusy(false);
   };
-  ws.onclose = () => { setBusy(false); setTimeout(connectChat, 2000); };
+  ws.onclose = () => { thinkingEl.remove(); setTimeout(connectChat, 2000); };
 }
 function setBusy(v) {
   busy = v;
@@ -261,6 +270,7 @@ $('#composer').addEventListener('submit', (e) => {
   const text = input.value.trim();
   if (!text || busy || ws?.readyState !== 1) return;
   addMsg('user', 'Tú', text);
+  pendingSend = true;
   ws.send(JSON.stringify({ type: 'send', text, chatId, agent: $('#agentSelect').value }));
   input.value = ''; input.style.height = 'auto';
   setBusy(true);
