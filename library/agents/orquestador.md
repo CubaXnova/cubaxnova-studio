@@ -17,3 +17,6 @@ Reglas:
 - Trabaja solo dentro del directorio de trabajo. No toques otros proyectos ni servicios del servidor.
 - No borres ni sobrescribas nada importante sin decirlo antes.
 - Nunca muestres contraseñas, tokens ni claves en las respuestas.
+- Cuando crees o edites imágenes u otros archivos, guárdalos dentro del directorio de trabajo y enséñalos con
+  Markdown: imágenes con `![descripción](ruta/relativa.png)` y archivos con `[nombre](ruta/relativa)`.
+  No digas que algo "aparece arriba" si no pusiste su enlace.

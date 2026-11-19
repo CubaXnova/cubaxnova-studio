@@ -25,7 +25,31 @@ export function codexEnv() {
   return { ...process.env, HOME: config.agentHome, CODEX_HOME: path.join(config.agentHome, '.codex') };
 }
 
-/** Ejecuta un turno de Codex. Devuelve { threadId, text, error }. */
+// Imágenes que crea Codex (imagegen) se guardan en su carpeta interna. Tras cada turno, las nuevas se copian a
+// workspace/generadas/ para que se vean en el chat y en Archivos.
+const GEN_DIR = () => path.join(config.agentHome, '.codex', 'generated_images');
+function newGeneratedImages(since) {
+  const out = [];
+  const walk = (dir, depth) => {
+    if (depth > 4 || !fs.existsSync(dir)) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p, depth + 1);
+      else if (/\.(png|jpe?g|webp)$/i.test(e.name) && fs.statSync(p).mtimeMs >= since) out.push(p);
+    }
+  };
+  walk(GEN_DIR(), 0);
+  const dest = path.join(config.workspaceDir, 'generadas');
+  return out.map((src) => {
+    fs.mkdirSync(dest, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    const name = `${stamp}-${path.basename(src)}`;
+    fs.copyFileSync(src, path.join(dest, name));
+    return `generadas/${name}`;
+  });
+}
+
+/** Ejecuta un turno de Codex. Devuelve { threadId, text, error, generated }. */
 export function runCodex({ prompt, threadId, onItem, signal, images = [] }) {
   // En el VPS la caja la pone systemd; ahí desactivamos del todo la de Codex (bwrap no funciona en Ubuntu reciente).
   const sandbox = config.codexSandbox === 'danger-full-access'
@@ -39,7 +63,13 @@ export function runCodex({ prompt, threadId, onItem, signal, images = [] }) {
     ? ['exec', 'resume', ...common, threadId, '-']
     : ['exec', ...common, '-C', config.workspaceDir, '-'];
 
-  return new Promise((resolve) => {
+  const started = Date.now() - 1000;
+  return new Promise((resolveRaw) => {
+    const resolve = (r) => {
+      let generated = [];
+      try { generated = newGeneratedImages(started); } catch { /* sin imágenes */ }
+      resolveRaw({ ...r, generated });
+    };
     const child = spawn(codexBin(), args, { cwd: config.workspaceDir, env: codexEnv(), detached: true });
     let buf = '';
     let stderr = '';
@@ -184,7 +214,8 @@ export async function sendMessage({ chatId, text, agentId, emit, signal, files =
       .map((m) => ({ id: m[1].toLowerCase(), task: m[2].trim() }))
       .filter((d) => team.some((a) => a.id === d.id))
       .slice(0, config.maxDelegations);
-    const visible = r.text.replace(DELEGATE_RE, '').trim();
+    let visible = r.text.replace(DELEGATE_RE, '').trim();
+    if (r.generated?.length) visible += `\n\n${r.generated.map((g) => `![imagen generada](${g})`).join('\n')}`;
     if (visible) chat.messages.push({ role: 'assistant', agent: principal.id, text: visible, at: Date.now() });
     emit({ type: 'message', agent: principal.id, name: principal.name, text: visible });
 
@@ -197,7 +228,8 @@ export async function sendMessage({ chatId, text, agentId, emit, signal, files =
       chat.messages.push({ role: 'delegation', agent: d.id, text: d.task, at: Date.now() });
       emit({ type: 'delegation', from: principal.id, agent: d.id, name: sub.name, task: d.task });
       const sr = await runCodex({ prompt: subagentPrompt(sub, d.task), signal, onItem: (item) => emit({ type: 'item', agent: d.id, item }) });
-      const out = sr.error ? `ERROR: ${sr.error}` : sr.text;
+      let out = sr.error ? `ERROR: ${sr.error}` : sr.text;
+      if (sr.generated?.length) out += `\n\n${sr.generated.map((g) => `![imagen generada](${g})`).join('\n')}`;
       chat.messages.push({ role: 'subagent', agent: d.id, text: out, at: Date.now() });
       emit({ type: 'message', agent: d.id, name: sub.name, sub: true, text: out });
       results.push(`## ${d.id}\n${out}`);
