@@ -75,7 +75,7 @@ ssh -L 7860:127.0.0.1:7860 usuario@IP_DEL_VPS
 
 ¿Prefieres un dominio con HTTPS? Mira `deploy/nginx-ejemplo.conf` (es un archivo nuevo, no modifica los de tus otros sitios).
 
-Actualizar: `sudo -u studio git -C /opt/cubaxnova-studio pull && sudo systemctl restart cubaxnova-studio`
+Actualizar: `sudo bash /opt/cubaxnova-studio/scripts/actualizar.sh` (baja lo último, instala dependencias y reinicia).
 
 Desinstalar: `sudo bash /opt/cubaxnova-studio/scripts/desinstalar-vps.sh`
 

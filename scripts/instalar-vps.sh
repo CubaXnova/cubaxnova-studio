@@ -47,7 +47,7 @@ NODE_DIR="$(dirname "$NODE_BIN")"
 say "4/6 Dependencias del proyecto (incluye Codex CLI local, no global)"
 mkdir -p "$DIR/data" "$DIR/workspace"
 chown -R "$USR:$USR" "$DIR"
-sudo -u "$USR" -H env PATH="$NODE_DIR:$PATH" bash -c "cd '$DIR' && npm install --omit=dev --no-fund --no-audit"
+sudo -u "$USR" -H env PATH="$NODE_DIR:$PATH" bash -c "cd '$DIR' && npm ci --omit=dev --no-fund --no-audit"
 if [ ! -d "$DIR/workspace/.git" ]; then
   sudo -u "$USR" -H env PATH="$NODE_DIR:$PATH" bash -c "cd '$DIR/workspace' && git init -q && git config user.name 'CubaXnova Studio' && git config user.email 'studio@localhost'" || true
 fi
