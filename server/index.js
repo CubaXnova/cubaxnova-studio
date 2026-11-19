@@ -111,6 +111,14 @@ api.post('/settings', wrap((req) => {
   if (b.clearTelegram) notify.saveSettings({ telegramToken: '', telegramChatId: '' });
   return notify.publicSettings();
 }));
+api.get('/push/key', wrap(() => ({ key: notify.pushPublicKey() })));
+api.post('/push/subscribe', wrap((req) => ({ devices: notify.addPushSubscription(req.body) })));
+api.post('/push/unsubscribe', wrap((req) => { notify.removePushSubscription(String(req.body?.endpoint || '')); return { ok: true }; }));
+api.post('/push/test', wrap(async () => {
+  const n = await notify.sendPush({ title: '👋 CubaXnova Studio', body: 'Los avisos en este móvil funcionan.' });
+  if (!n) throw new Error('No hay ningún móvil suscrito o no se pudo enviar.');
+  return { sent: n };
+}));
 api.post('/telegram/detect', wrap(() => notify.detectChat()));
 api.post('/telegram/test', wrap(async () => { await notify.sendTelegram('👋 Hola desde CubaXnova Studio. Los avisos funcionan.'); return { ok: true }; }));
 
@@ -233,7 +241,7 @@ async function runJob(msg) {
     job = null;
     broadcast({ type: 'idle', chatId: done.chatId });
     if (done.error !== 'Detenido') {
-      notify.notifyTask({ title: done.title, ok: !done.error, text: done.error || done.lastText, queued: queue.length });
+      notify.notifyTask({ title: done.title, ok: !done.error, text: done.error || done.lastText, queued: queue.length, chatId: done.chatId });
     }
     broadcastQueue();
     setTimeout(runNext, 1000);

@@ -254,6 +254,10 @@ const thinkingEl = Object.assign(document.createElement('div'), { className: 'th
 
 let ws;
 let pendingSend = false;
+let lastLiveAnswer = '';
+let wantVoice = false;
+let autoRead = store.get('autoRead') === '1';
+const VOICE_RE = /(l[eé]e(me|melo|lo)|en voz alta|d[ií]melo en voz|h[aá]blame|resp[oó]ndeme en voz)/i;
 function connectChat() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/chat`);
   ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', chatId }));
@@ -269,10 +273,19 @@ function connectChat() {
     if (ev.type === 'running') { setBusy(true); thinkingEl.textContent = 'Trabajando (sigue en el servidor)'; box.appendChild(thinkingEl); scroll(); }
     else if (ev.type === 'turn') { activity = null; items.clear(); thinkingEl.textContent = `${ev.name} trabajando`; box.appendChild(thinkingEl); scroll(); }
     else if (ev.type === 'item') showItem(ev.agent, ev.item);
-    else if (ev.type === 'message') { if (ev.text) addMsg(ev.sub ? 'sub' : '', ev.name, ev.text); activity = null; }
+    else if (ev.type === 'message') {
+      if (ev.text) addMsg(ev.sub ? 'sub' : '', ev.name, ev.text);
+      activity = null;
+      if (!ev.sub && ev.text) lastLiveAnswer = ev.text;
+    }
     else if (ev.type === 'delegation') { addDelegation(ev.name, ev.task); activity = null; items.clear(); thinkingEl.textContent = `${ev.name} trabajando`; box.appendChild(thinkingEl); }
     else if (ev.type === 'error') addMsg('err', 'Error', ev.text);
-    else if (ev.type === 'idle') setBusy(false);
+    else if (ev.type === 'idle') {
+      setBusy(false);
+      // Leer en voz alta la respuesta final si está activado o si lo pediste en el mensaje.
+      if (lastLiveAnswer && !ev.quiet && (autoRead || wantVoice)) speak(lastLiveAnswer, true);
+      lastLiveAnswer = ''; wantVoice = false;
+    }
     else if (ev.type === 'snapshot') addSnapshot(ev);
   };
   ws.onclose = () => { thinkingEl.remove(); setTimeout(connectChat, 2000); };
@@ -297,6 +310,7 @@ $('#composer').addEventListener('submit', async (e) => {
   const files = attachments.map((a) => a.path);
   addMsg('user', 'Tú', text || 'Mira los archivos adjuntos.', files);
   pendingSend = true;
+  if (VOICE_RE.test(text)) wantVoice = true;
   ws.send(JSON.stringify({ type: 'send', text, files, chatId, provider, agent: $('#agentSelect').value }));
   input.value = ''; input.style.height = 'auto';
   attachments = []; renderAttachments();
@@ -367,9 +381,9 @@ if (SR) {
     rec.start();
   });
 }
-function speak(text) {
+function speak(text, auto = false) {
   if (!('speechSynthesis' in window)) return;
-  if (speechSynthesis.speaking) { speechSynthesis.cancel(); return; } // pulsar otra vez = parar
+  if (speechSynthesis.speaking) { speechSynthesis.cancel(); if (!auto) return; } // pulsar otra vez = parar
   const u = new SpeechSynthesisUtterance(text.replace(/[#*`_>|]/g, ' ').slice(0, 4000));
   u.lang = 'es-ES';
   const v = speechSynthesis.getVoices().find((x) => x.lang?.startsWith('es'));
@@ -501,6 +515,60 @@ function addSnapshot(m) {
 /* ---------------- App instalable (PWA) ---------------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 
+/* ---------------- Avisos en el móvil (Web Push) y lectura automática ---------------- */
+function pushMsg(t, ok) { const el = $('#pushMsg'); el.textContent = t; el.className = `tiny ${ok ? 'ok' : 'bad'}`; }
+const b64ToBytes = (b64) => {
+  const s = atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(s, (c) => c.charCodeAt(0));
+};
+async function refreshPushState() {
+  let on = false;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    on = Boolean(await reg?.pushManager?.getSubscription()) && Notification.permission === 'granted';
+  } catch { /* sin soporte */ }
+  $('#pushState').textContent = on ? 'activos' : 'apagados';
+  $('#pushState').classList.toggle('ok', on);
+  $('#pushOn').textContent = on ? '🔕 Desactivar avisos en este móvil' : '🔔 Activar avisos en este móvil';
+  return on;
+}
+$('#pushOn').addEventListener('click', async () => {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Este navegador no admite avisos. Usa Chrome y la app instalada.');
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing && Notification.permission === 'granted') {
+      await api('/push/unsubscribe', { method: 'POST', body: { endpoint: existing.endpoint } });
+      await existing.unsubscribe();
+      pushMsg('Avisos desactivados en este móvil.', true);
+      return refreshPushState();
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error('No diste permiso. Actívalo en Ajustes del móvil → Apps → Chrome/Studio → Notificaciones.');
+    const { key } = await api('/push/key');
+    const sub = existing || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+    await api('/push/subscribe', { method: 'POST', body: sub.toJSON() });
+    pushMsg('Avisos activados. Pulsa "Enviar aviso de prueba".', true);
+    refreshPushState();
+  } catch (err) { pushMsg(err.message); }
+});
+$('#pushTest').addEventListener('click', async () => {
+  try { await api('/push/test', { method: 'POST' }); pushMsg('Aviso enviado. Mira tus notificaciones.', true); }
+  catch (err) { pushMsg(err.message); }
+});
+$('#autoRead').checked = autoRead;
+$('#autoRead').addEventListener('change', (e) => {
+  autoRead = e.target.checked; store.set('autoRead', autoRead ? '1' : null);
+  if (autoRead) speak('Listo. Leeré las respuestas en voz alta.', true);
+});
+// Al tocar una notificación: abrir ese chat.
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.type === 'open') {
+    const id = new URL(e.data.url, location.origin).searchParams.get('chat');
+    if (id) { openChat(id); $('.bottomnav [data-view="chat"]').click(); }
+  }
+});
+
 /* ---------------- Terminal ---------------- */
 let term; let fit; let tws;
 function fitTerm() {
@@ -550,7 +618,9 @@ async function start() {
   started = true;
   renderBrain();
   await loadLibrary();
+  const fromUrl = new URLSearchParams(location.search).get('chat');
+  if (fromUrl) { chatId = fromUrl; history.replaceState(null, '', '/'); }
   if (chatId) await openChat(chatId);
-  connectChat(); startTerminal(); loadStatus();
+  connectChat(); startTerminal(); loadStatus(); refreshPushState();
 }
 fetch('/api/me').then((r) => r.json()).then((m) => (m.authed ? start() : showLogin()));

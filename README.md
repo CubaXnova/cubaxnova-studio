@@ -16,7 +16,8 @@ Además:
 - **↶ Deshacer**: antes y después de cada tarea se guarda una "foto" del workspace con git; un botón deshace los cambios de la última tarea.
 - **App en el móvil (PWA)**: se instala desde Chrome con *Añadir a pantalla de inicio*.
 - **📎 Adjuntar imágenes y archivos** (o pegar una captura): las imágenes se le pasan a Codex para que las vea.
-- **🎤 Dictar por voz** (si el navegador lo permite) y **🔊 escuchar** las respuestas.
+- **🎤 Dictar por voz** (si el navegador lo permite) y **🔊 escuchar** las respuestas: a mano, siempre (interruptor) o cuando escribes "léemelo".
+- **🔔 Avisos de la app en el móvil** (Web Push) cuando termina o falla un trabajo, aunque la app esté cerrada.
 - **Avisos por Telegram** al terminar o fallar cada tarea (se configura en *Chats → Avisos por Telegram*).
 - Las tareas **siguen en el servidor** aunque cierres la página o se corte la conexión.
 

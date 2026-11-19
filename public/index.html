@@ -90,6 +90,17 @@
         <section class="tabpane hidden" id="tab-chats">
           <button id="newChat" class="btn primary small full">+ Chat nuevo</button>
           <ul id="chatList" class="items"></ul>
+          <details class="form-box" id="phoneBox">
+            <summary>📱 Avisos y voz en este móvil <span id="pushState" class="badge">apagados</span></summary>
+            <div class="stack">
+              <p class="muted tiny">Te llega una notificación cuando termina (o falla) un trabajo, aunque la app esté cerrada.</p>
+              <button id="pushOn" class="btn small" type="button">🔔 Activar avisos en este móvil</button>
+              <button id="pushTest" class="btn small" type="button">Enviar aviso de prueba</button>
+              <label class="check"><input type="checkbox" id="autoRead"> 🔊 Leer las respuestas en voz alta automáticamente</label>
+              <p class="muted tiny">Aunque esté apagado, si escribes "léemelo" o "en voz alta" en tu mensaje, la respuesta se lee sola.</p>
+              <p id="pushMsg" class="tiny"></p>
+            </div>
+          </details>
           <details class="form-box" id="tgBox">
             <summary>🔔 Avisos por Telegram <span id="tgState" class="badge">sin configurar</span></summary>
             <div class="stack">
