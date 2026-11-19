@@ -155,3 +155,19 @@ textarea { resize: vertical; }
 .fcard .fmeta a { color: var(--accent2); text-decoration: none; }
 .file-empty { grid-column: 1 / -1; color: var(--muted); font-size: 13px; }
 .layout[data-view="files"] [data-panel="library"] { display: flex; }
+
+/* Adjuntos y voz */
+.btn.icon { padding: 6px 9px; font-size: 18px; line-height: 1; align-self: flex-end; }
+#micBtn.rec { background: var(--danger); border-color: var(--danger); animation: blink 1s infinite; }
+.attach-row { display: flex; gap: 8px; flex-wrap: wrap; padding: 8px 14px 0; background: var(--bg2); border-top: 1px solid var(--line); }
+.chip { position: relative; display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--line); border-radius: 8px; padding: 4px 26px 4px 4px; font-size: 12px; max-width: 200px; }
+.chip img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; }
+.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip button { position: absolute; right: 4px; top: 4px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.chip.up { opacity: .5; }
+.msg .files { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.msg .files img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; }
+.msg .files a.doc { font-size: 12px; color: var(--accent2); }
+.speak { background: none; border: 0; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .7; }
+.speak:hover { opacity: 1; }
+.composer { align-items: flex-end; }

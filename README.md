@@ -12,6 +12,8 @@ Espacio de trabajo **de código abierto** para trabajar con inteligencia artific
 
 Además:
 - **Cola de tareas**: si Codex está ocupado, lo que envíes queda en fila y se hace después (sobrevive a reinicios). Ideal para dejar trabajo de noche.
+- **📎 Adjuntar imágenes y archivos** (o pegar una captura): las imágenes se le pasan a Codex para que las vea.
+- **🎤 Dictar por voz** (si el navegador lo permite) y **🔊 escuchar** las respuestas.
 - **Avisos por Telegram** al terminar o fallar cada tarea (se configura en *Chats → Avisos por Telegram*).
 - Las tareas **siguen en el servidor** aunque cierres la página o se corte la conexión.
 

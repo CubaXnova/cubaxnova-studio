@@ -85,6 +85,21 @@ api.get('/files', (req, res) => {
   }
 });
 
+// Subir archivos desde el móvil/PC al workspace (carpeta subidas/). Máx. 25 MB por archivo.
+api.post('/upload', express.raw({ type: () => true, limit: '25mb' }), wrap((req) => {
+  const raw = decodeURIComponent(String(req.headers['x-filename'] || 'archivo'));
+  const ext = path.extname(raw).toLowerCase().replace(/[^.a-z0-9]/g, '').slice(0, 8);
+  const base = path.basename(raw, path.extname(raw)).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'archivo';
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+  const name = `${stamp}-${crypto.randomBytes(2).toString('hex')}-${base}${ext}`;
+  if (!Buffer.isBuffer(req.body) || !req.body.length) throw new Error('Archivo vacío');
+  const dir = path.join(config.workspaceDir, 'subidas');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, name), req.body);
+  return { path: `subidas/${name}`, size: req.body.length };
+}));
+
 // Ajustes y avisos por Telegram
 api.get('/settings', wrap(() => notify.publicSettings()));
 api.post('/settings', wrap((req) => {
@@ -150,7 +165,8 @@ function broadcast(ev) {
 const broadcastQueue = () => broadcast({ type: 'queue', items: queueView(), running: job ? { chatId: job.chatId, title: job.title } : null });
 
 function enqueue(msg) {
-  queue.push({ id: crypto.randomUUID(), chatId: msg.chatId || null, text: String(msg.text).trim(), agent: msg.agent || null, at: Date.now() });
+  const files = Array.isArray(msg.files) ? msg.files.slice(0, 10).map(String) : [];
+  queue.push({ id: crypto.randomUUID(), chatId: msg.chatId || null, text: String(msg.text).trim(), files, agent: msg.agent || null, at: Date.now() });
   saveQueue();
   broadcastQueue();
   runNext();
@@ -173,7 +189,7 @@ async function runJob(msg) {
     broadcast(ev);
   };
   try {
-    await sendMessage({ chatId: msg.chatId, text: msg.text, agentId: msg.agent, emit, signal: job.controller.signal });
+    await sendMessage({ chatId: msg.chatId, text: msg.text, files: msg.files || [], agentId: msg.agent, emit, signal: job.controller.signal });
   } catch (e) {
     emit({ type: 'error', text: e.message });
   } finally {
@@ -205,7 +221,11 @@ function handleChat(ws) {
       } else send({ type: 'idle', chatId: msg.chatId || null, quiet: true });
       return;
     }
-    if (msg.type !== 'send' || !String(msg.text || '').trim()) return;
+    if (msg.type !== 'send') return;
+    if (!String(msg.text || '').trim()) {
+      if (!Array.isArray(msg.files) || !msg.files.length) return;
+      msg.text = 'Mira los archivos adjuntos.';
+    }
     if (job) {
       if (queue.length >= 50) return send({ type: 'error', chatId: msg.chatId, text: 'La cola está llena (50 tareas).' });
       send({ type: 'queued', chatId: msg.chatId || null, position: queue.length + 1 });

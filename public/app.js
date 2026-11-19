@@ -7,6 +7,7 @@ const store = {
 };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const IMG_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
+const fileUrl = (p, dl) => `/api/files?path=${encodeURIComponent(p)}${dl ? '&download=1' : ''}`;
 // Convierte los enlaces a archivos locales en enlaces que abren el archivo, y muestra las imágenes dentro del chat.
 function md(s) {
   const tpl = document.createElement('template');
@@ -185,7 +186,7 @@ async function openChat(id) {
   $('#messages').innerHTML = '';
   const name = (id2) => library.agents.find((a) => a.id === id2)?.name || id2;
   for (const m of c.messages) {
-    if (m.role === 'user') addMsg('user', 'Tú', m.text);
+    if (m.role === 'user') addMsg('user', 'Tú', m.text, m.files || []);
     else if (m.role === 'assistant') addMsg('', name(m.agent), m.text);
     else if (m.role === 'subagent') addMsg('sub', name(m.agent), m.text);
     else if (m.role === 'delegation') addDelegation(name(m.agent), m.text);
@@ -197,11 +198,16 @@ async function openChat(id) {
 const box = $('#messages');
 const scroll = () => { box.scrollTop = box.scrollHeight; };
 function clearEmpty() { $('.empty', box)?.remove(); }
-function addMsg(cls, who, text) {
+function addMsg(cls, who, text, files = []) {
   clearEmpty();
   const el = document.createElement('div');
   el.className = `msg ${cls}`;
-  el.innerHTML = `<div class="who">${esc(who)}</div><div class="body">${cls === 'user' ? esc(text).replace(/\n/g, '<br>') : md(text)}</div>`;
+  const speakBtn = cls === 'user' || cls === 'err' || !('speechSynthesis' in window) ? '' : '<button class="speak" title="Leer en voz alta">🔊</button>';
+  const filesHtml = files.length ? `<div class="files">${files.map((f) => (IMG_RE.test(f)
+    ? `<a href="${fileUrl(f)}" target="_blank"><img src="${fileUrl(f)}" alt=""></a>`
+    : `<a class="doc" href="${fileUrl(f)}" target="_blank">📄 ${esc(f.split('/').pop())}</a>`)).join('')}</div>` : '';
+  el.innerHTML = `<div class="who">${esc(who)} ${speakBtn}</div><div class="body">${cls === 'user' ? esc(text).replace(/\n/g, '<br>') : md(text)}${filesHtml}</div>`;
+  el.querySelector('.speak')?.addEventListener('click', () => speak(el.querySelector('.body').innerText));
   box.appendChild(el); scroll();
 }
 function addDelegation(name, task) {
@@ -271,16 +277,94 @@ input.addEventListener('input', () => { input.style.height = 'auto'; input.style
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(max-width: 900px)').matches) { e.preventDefault(); $('#composer').requestSubmit(); }
 });
-$('#composer').addEventListener('submit', (e) => {
+$('#composer').addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = input.value.trim();
-  if (!text || ws?.readyState !== 1) return;
-  addMsg('user', 'Tú', text);
+  if ((!text && !attachments.length) || ws?.readyState !== 1) return;
+  if (attachments.some((a) => !a.path)) return; // aún subiendo
+  const files = attachments.map((a) => a.path);
+  addMsg('user', 'Tú', text || 'Mira los archivos adjuntos.', files);
   pendingSend = true;
-  ws.send(JSON.stringify({ type: 'send', text, chatId, agent: $('#agentSelect').value }));
+  ws.send(JSON.stringify({ type: 'send', text, files, chatId, agent: $('#agentSelect').value }));
   input.value = ''; input.style.height = 'auto';
+  attachments = []; renderAttachments();
   setBusy(true);
 });
+
+/* ---------------- Adjuntar archivos ---------------- */
+let attachments = []; // { name, path|null, preview }
+function renderAttachments() {
+  const row = $('#attachRow');
+  row.classList.toggle('hidden', !attachments.length);
+  row.innerHTML = attachments.map((a, i) => `<div class="chip ${a.path ? '' : 'up'}">
+    ${a.preview ? `<img src="${a.preview}" alt="">` : '📄'}<span>${esc(a.path ? a.name : 'Subiendo…')}</span>
+    <button type="button" data-rm="${i}" title="Quitar">✕</button></div>`).join('');
+}
+$('#attachRow').addEventListener('click', (e) => {
+  if (e.target.dataset.rm !== undefined) { attachments.splice(+e.target.dataset.rm, 1); renderAttachments(); }
+});
+async function uploadFiles(list) {
+  for (const file of list) {
+    if (file.size > 25 * 1024 * 1024) { alert(`${file.name} pasa de 25 MB`); continue; }
+    const a = { name: file.name, path: null, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : '' };
+    attachments.push(a); renderAttachments();
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) }, body: file });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Error al subir');
+      a.path = data.path;
+    } catch (err) {
+      attachments = attachments.filter((x) => x !== a);
+      alert(`No se pudo subir ${file.name}: ${err.message}`);
+    }
+    renderAttachments();
+  }
+}
+$('#attachBtn').addEventListener('click', () => $('#fileInput').click());
+$('#fileInput').addEventListener('change', (e) => { uploadFiles([...e.target.files]); e.target.value = ''; });
+// Pegar una captura con Ctrl+V en el cuadro de texto
+input.addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); uploadFiles(files); }
+});
+
+/* ---------------- Voz: dictar y escuchar ---------------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (SR) {
+  $('#micBtn').classList.remove('hidden');
+  $('#micBtn').addEventListener('click', () => {
+    if (rec) { rec.stop(); return; }
+    rec = new SR();
+    rec.lang = 'es-ES';
+    rec.interimResults = true;
+    rec.continuous = true;
+    const before = input.value ? `${input.value.trim()} ` : '';
+    rec.onresult = (ev) => {
+      let txt = '';
+      for (const r of ev.results) txt += r[0].transcript;
+      input.value = before + txt;
+      input.dispatchEvent(new Event('input'));
+    };
+    rec.onerror = (ev) => {
+      if (ev.error === 'not-allowed') alert('Permite el micrófono para esta página en el navegador.');
+      else if (ev.error === 'network') alert('El dictado necesita conexión con el servicio de voz del navegador y no está disponible. Usa el micrófono del teclado del móvil.');
+    };
+    rec.onend = () => { rec = null; $('#micBtn').classList.remove('rec'); };
+    $('#micBtn').classList.add('rec');
+    rec.start();
+  });
+}
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  if (speechSynthesis.speaking) { speechSynthesis.cancel(); return; } // pulsar otra vez = parar
+  const u = new SpeechSynthesisUtterance(text.replace(/[#*`_>|]/g, ' ').slice(0, 4000));
+  u.lang = 'es-ES';
+  const v = speechSynthesis.getVoices().find((x) => x.lang?.startsWith('es'));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+}
+
 $('#stop').addEventListener('click', () => ws?.send(JSON.stringify({ type: 'stop' })));
 
 /* ---------------- Cola de tareas ---------------- */
@@ -336,7 +420,6 @@ $('#tgMode').addEventListener('change', async (e) => {
 
 /* ---------------- Archivos (galería) ---------------- */
 let currentDir = store.get('filesDir') || '';
-const fileUrl = (p, dl) => `/api/files?path=${encodeURIComponent(p)}${dl ? '&download=1' : ''}`;
 const kb = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 async function loadFiles(dir = '') {
   let data;

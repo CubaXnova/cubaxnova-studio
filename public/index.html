@@ -122,8 +122,12 @@
           </div>
         </div>
         <div id="queueBox" class="queue hidden"></div>
+        <div id="attachRow" class="attach-row hidden"></div>
         <form id="composer" class="composer">
-          <textarea id="input" rows="1" placeholder="Escribe una indicación…"></textarea>
+          <input id="fileInput" type="file" multiple hidden>
+          <button id="attachBtn" class="btn ghost icon" type="button" title="Adjuntar imagen o archivo">📎</button>
+          <button id="micBtn" class="btn ghost icon hidden" type="button" title="Hablar (dictar)">🎤</button>
+          <textarea id="input" rows="1" placeholder="Escribe o dicta…"></textarea>
           <button id="send" class="btn primary" type="submit">Enviar</button>
           <button id="stop" class="btn danger hidden" type="button">Detener</button>
         </form>

@@ -26,13 +26,15 @@ export function codexEnv() {
 }
 
 /** Ejecuta un turno de Codex. Devuelve { threadId, text, error }. */
-export function runCodex({ prompt, threadId, onItem, signal }) {
+export function runCodex({ prompt, threadId, onItem, signal, images = [] }) {
   // En el VPS la caja la pone systemd; ahí desactivamos del todo la de Codex (bwrap no funciona en Ubuntu reciente).
   const sandbox = config.codexSandbox === 'danger-full-access'
     ? ['--dangerously-bypass-approvals-and-sandbox']
     : ['-c', `sandbox_mode="${config.codexSandbox}"`];
   const common = ['--json', '--skip-git-repo-check', ...sandbox];
   if (config.codexModel) common.push('-m', config.codexModel);
+  // Imágenes adjuntas: Codex las "ve". Se usa --image=RUTA para que cada flag tome exactamente un valor.
+  for (const img of images) common.push(`--image=${img}`);
   const args = threadId
     ? ['exec', 'resume', ...common, threadId, '-']
     : ['exec', ...common, '-C', config.workspaceDir, '-'];
@@ -144,7 +146,7 @@ export function deleteChat(id) { if (/^[a-f0-9-]{36}$/.test(id)) fs.rmSync(path.
 /**
  * Procesa un mensaje del usuario. `emit` manda eventos a la interfaz en vivo.
  */
-export async function sendMessage({ chatId, text, agentId, emit, signal }) {
+export async function sendMessage({ chatId, text, agentId, emit, signal, files = [] }) {
   let chat = chatId && loadChat(chatId);
   if (!chat) chat = { id: crypto.randomUUID(), title: text.slice(0, 60), threadId: null, agentId: null, messages: [] };
   emit({ type: 'chat', chatId: chat.id, title: chat.title });
@@ -154,7 +156,11 @@ export async function sendMessage({ chatId, text, agentId, emit, signal }) {
   if (!principal) { emit({ type: 'error', text: 'No hay agentes activos. Activa uno en el panel de Agentes.' }); return; }
   const team = agents.filter((a) => a.id !== principal.id && a.role !== 'principal');
 
-  chat.messages.push({ role: 'user', text, at: Date.now() });
+  // Adjuntos (rutas relativas al workspace, ya validadas al subirlos).
+  files = files.filter((f) => typeof f === 'string' && /^subidas\/[\w.-]+$/.test(f) && fs.existsSync(path.join(config.workspaceDir, f)));
+  const images = files.filter((f) => /\.(png|jpe?g|gif|webp)$/i.test(f)).map((f) => path.join(config.workspaceDir, f));
+  if (files.length) text += `\n\n[Archivos adjuntos en el directorio de trabajo: ${files.join(', ')}]`;
+  chat.messages.push({ role: 'user', text: text.replace(/\n\n\[Archivos adjuntos[^\]]*\]$/, ''), files, at: Date.now() });
   saveChat(chat);
 
   // Si cambia el agente principal se empieza un hilo nuevo de Codex con sus instrucciones.
@@ -163,7 +169,7 @@ export async function sendMessage({ chatId, text, agentId, emit, signal }) {
 
   for (let round = 0; round <= MAX_ROUNDS; round++) {
     emit({ type: 'turn', agent: principal.id, name: principal.name });
-    const r = await runCodex({ prompt, threadId, signal, onItem: (item) => emit({ type: 'item', agent: principal.id, item }) });
+    const r = await runCodex({ prompt, threadId, signal, images: round === 0 ? images : [], onItem: (item) => emit({ type: 'item', agent: principal.id, item }) });
     threadId = r.threadId;
     chat.threadId = threadId;
     chat.agentId = principal.id;
