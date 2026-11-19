@@ -171,3 +171,24 @@ textarea { resize: vertical; }
 .speak { background: none; border: 0; cursor: pointer; font-size: 13px; padding: 0 2px; opacity: .7; }
 .speak:hover { opacity: 1; }
 .composer { align-items: flex-end; }
+
+/* Barra de escribir en el móvil: texto arriba a lo ancho, botones abajo */
+#attachBtn { grid-area: attach; } #micBtn { grid-area: mic; } #input { grid-area: input; }
+#stop { grid-area: stop; } #send { grid-area: send; }
+@media (max-width: 900px) {
+  .composer {
+    display: grid; gap: 8px; padding: 8px 10px 10px;
+    grid-template-columns: auto auto 1fr auto auto;
+    grid-template-areas: "input input input input input" "attach mic . stop send";
+    align-items: center;
+  }
+  .composer textarea { min-height: 44px; font-size: 16px; }
+  .composer .btn { padding: 8px 14px; font-size: 14px; white-space: nowrap; }
+  .composer .btn.icon { padding: 6px 10px; font-size: 18px; align-self: center; }
+  .attach-row { padding: 8px 10px 0; }
+}
+@media (max-width: 400px) {
+  .topbar { gap: 8px; padding: 8px 10px; }
+  .brand { font-size: 13px; gap: 6px; }
+  .agent-pick select { max-width: 120px; padding: 4px 6px; }
+}
