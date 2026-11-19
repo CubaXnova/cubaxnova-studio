@@ -29,8 +29,17 @@ Pásala SIEMPRE como imagen de referencia a imagegen y pide "mismo estilo, misma
 - Texto dentro de la imagen.
 
 ## Cómo trabajar con las imágenes del juego
-1. Originales en `arte/originales/` (copia; NUNCA modificar). Resultado en `arte/nuevas/` con la **misma ruta y el mismo nombre de archivo** que el original, para poder reemplazarlo luego.
-2. Mira el original solo para saber **qué objeto** es (y su nombre de archivo); el **estilo** viene de la referencia.
-3. Si el original no es 512×512, entrega también una copia redimensionada al tamaño original con el sufijo `@original` antes de la extensión... salvo que el usuario diga otra cosa.
-4. Trabaja por **tandas de 5** imágenes y anota cada una en `arte/progreso.md` (original → nueva → ✅/❌ y motivo).
-5. Al terminar cada tanda, muestra las nuevas en el chat con enlaces markdown y espera el visto bueno antes de seguir.
+Los originales están en `arte/originales/` (copia; NUNCA modificarlos). Muchas imágenes son el MISMO objeto en varios
+tamaños (p. ej. `battleship_micro.jpg` 28×28 y `battleship_small.jpg` 40×40).
+
+1. **Agrupa por objeto**: quita el sufijo de tamaño (`_micro`, `_small`, `_medium`, `_big`...) para saber cuántos objetos distintos hay.
+2. **Una maestra por objeto**: genera UNA imagen 512×512 con imagegen y guárdala en `arte/maestras/<carpeta>/<objeto>.png`.
+   El original solo sirve para saber QUÉ objeto es; el estilo viene de la imagen de referencia.
+3. **Deriva los tamaños** a partir de la maestra (sin volver a usar imagegen), con Python + Pillow
+   (si falta: `python3 -m pip install --user --break-system-packages pillow`) o ImageMagick si existe:
+   - mismo **nombre**, **formato** (jpg/png) y **tamaño exacto** que cada original;
+   - guarda en `arte/nuevas/<misma ruta que el original>`;
+   - si el original es JPG (sin transparencia), rellena el fondo con el color de la esquina del original;
+   - redimensiona con buen filtro (LANCZOS) y, para iconos ≤ 64 px, aumenta un poco el contraste para que se lea bien.
+4. Trabaja por **tandas de 5 objetos** y anota cada uno en `arte/progreso.md` (objeto → maestra → archivos derivados → ✅/❌).
+5. Al terminar la tanda, muestra en el chat las maestras con enlaces markdown y espera el visto bueno antes de seguir.
