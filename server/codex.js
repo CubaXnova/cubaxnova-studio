@@ -27,7 +27,11 @@ export function codexEnv() {
 
 /** Ejecuta un turno de Codex. Devuelve { threadId, text, error }. */
 export function runCodex({ prompt, threadId, onItem, signal }) {
-  const common = ['--json', '--skip-git-repo-check', '-c', `sandbox_mode="${config.codexSandbox}"`];
+  // En el VPS la caja la pone systemd; ahí desactivamos del todo la de Codex (bwrap no funciona en Ubuntu reciente).
+  const sandbox = config.codexSandbox === 'danger-full-access'
+    ? ['--dangerously-bypass-approvals-and-sandbox']
+    : ['-c', `sandbox_mode="${config.codexSandbox}"`];
+  const common = ['--json', '--skip-git-repo-check', ...sandbox];
   if (config.codexModel) common.push('-m', config.codexModel);
   const args = threadId
     ? ['exec', 'resume', ...common, threadId, '-']
