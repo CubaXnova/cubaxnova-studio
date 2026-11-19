@@ -105,8 +105,8 @@ En el VPS se usa `CODEX_SANDBOX=danger-full-access` porque la caja propia de Cod
 
 ## Seguridad
 
-- Escucha solo en `127.0.0.1`.
-- La IA y la terminal solo pueden escribir en `workspace/` y `data/`: no pueden modificar el código de Studio ni tus proyectos. No lo expongas a internet sin HTTPS.
+- Escucha solo en `127.0.0.1`. No lo expongas a internet sin HTTPS.
+- La IA y la terminal solo pueden escribir en `workspace/` y `data/`: no pueden modificar el código de Studio ni tus proyectos.
 - Login con contraseña, cookie `HttpOnly` + `SameSite=Strict`, límite de intentos y comprobación de origen en WebSockets.
 - La terminal y Codex corren como el usuario `studio`: lo que hagan no alcanza a otros usuarios ni proyectos.
 - El login de Codex, los chats y tus agentes/skills viven en `data/` (fuera de git).
