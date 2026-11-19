@@ -68,7 +68,8 @@ sed -e "s#^ExecStart=.*#ExecStart=$NODE_BIN server/index.js#" \
     -e "s#^Environment=NODE_ENV=production#Environment=NODE_ENV=production\nEnvironment=PATH=$NODE_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin#" \
     "$DIR/deploy/cubaxnova-studio.service" > /etc/systemd/system/cubaxnova-studio.service
 systemctl daemon-reload
-systemctl enable --now cubaxnova-studio
+systemctl enable cubaxnova-studio
+systemctl restart cubaxnova-studio
 sleep 2
 systemctl --no-pager --lines=5 status cubaxnova-studio || true
 
