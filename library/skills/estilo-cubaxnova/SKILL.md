@@ -80,6 +80,12 @@ tamaños (p. ej. `battleship_micro.jpg` 28×28 y `battleship_small.jpg` 40×40).
 4. Trabaja por **tandas de 5 objetos** y anota cada uno en `arte/progreso.md` (objeto → maestra → archivos derivados → ✅/❌).
 5. Al terminar la tanda, muestra en el chat las maestras con enlaces markdown y espera el visto bueno antes de seguir.
 
+## Acabado de iconos pequeños
+- Después de reducir a 64×64 o menos, aumenta el contraste y aplica una nitidez suave con unsharp mask.
+- Añade alrededor de la silueta un contorno de 1 px oscuro y semitransparente para que destaque sobre fondos oscuros.
+- Para naves largas y finas que pierdan legibilidad en `small` o `micro`, puede generarse con imagegen una vista compacta 3/4 más frontal, conservando identidad, estilo y colores. Úsala solo para esas variantes pequeñas; no reemplaza ni modifica la maestra.
+- Encuadra el objeto para aprovechar el cuadrado disponible, conserva sus proporciones y mantén el fondo transparente.
+
 ## Lecciones aprendidas (evita estos errores)
 - imagegen ya guarda cada imagen en `$CODEX_HOME/generated_images/`: **copia el PNG desde ahí**. NUNCA pases la imagen
   en Base64 dentro de un comando (falla con "Argument list too long").
