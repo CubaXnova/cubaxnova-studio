@@ -1,0 +1,21 @@
+# Servicio systemd propio. Corre con el usuario "studio", que NO tiene acceso a tus otros proyectos.
+[Unit]
+Description=CubaXnova Studio
+After=network.target
+
+[Service]
+Type=simple
+User=studio
+Group=studio
+WorkingDirectory=/opt/cubaxnova-studio
+ExecStart=/usr/bin/env node server/index.js
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+# Límites para que nunca le quite recursos a producción
+MemoryMax=1500M
+CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target

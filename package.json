@@ -1,0 +1,40 @@
+{
+  "name": "cubaxnova-studio",
+  "version": "0.1.0",
+  "description": "Espacio de trabajo de código abierto para trabajar con IA: chat, agentes y subagentes, skills y terminal del servidor en un solo lugar.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "codex-login": "node scripts/codex.js login --device-auth",
+    "codex-status": "node scripts/codex.js login status",
+    "codex": "node scripts/codex.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CubaXnova/cubaxnova-studio.git"
+  },
+  "keywords": [
+    "ai",
+    "codex",
+    "agents",
+    "skills",
+    "terminal",
+    "workspace"
+  ],
+  "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.15.0",
+    "@openai/codex": "^0.170.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "dompurify": "^3.4.18",
+    "express": "^5.3.0",
+    "marked": "^18.2.1",
+    "ws": "^8.23.0"
+  }
+}

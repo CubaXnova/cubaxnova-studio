@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1116">
+  <title>CubaXnova Studio</title>
+  <link rel="stylesheet" href="/vendor/xterm/css/xterm.css">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <!-- Login -->
+  <div id="login" class="login hidden">
+    <form id="loginForm" class="login-card">
+      <div class="brand big"><span class="dot"></span>CubaXnova <b>Studio</b></div>
+      <p class="muted">Tu espacio de trabajo con IA: chat, agentes, skills y terminal del servidor.</p>
+      <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+      <button class="btn primary" type="submit">Entrar</button>
+      <p id="loginError" class="error"></p>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div class="brand"><span class="dot"></span>CubaXnova <b>Studio</b></div>
+      <label class="agent-pick">Agente
+        <select id="agentSelect"></select>
+      </label>
+      <span id="status" class="status" title="Estado de Codex">…</span>
+      <button id="logout" class="btn ghost small">Salir</button>
+    </header>
+
+    <main class="layout" data-view="chat">
+      <!-- Panel izquierdo: agentes, skills y chats -->
+      <aside class="panel side" data-panel="library">
+        <nav class="tabs">
+          <button class="tab active" data-tab="agents">Agentes</button>
+          <button class="tab" data-tab="skills">Skills</button>
+          <button class="tab" data-tab="chats">Chats</button>
+        </nav>
+        <section class="tabpane" id="tab-agents">
+          <ul id="agentList" class="items"></ul>
+          <details class="form-box">
+            <summary>+ Nuevo agente</summary>
+            <form id="agentForm" class="stack">
+              <input name="name" placeholder="Nombre (p. ej. Tester)" required>
+              <input name="description" placeholder="¿Para qué sirve? (una línea)" required>
+              <select name="role">
+                <option value="subagente">Subagente (ayuda al principal)</option>
+                <option value="principal">Principal (habla contigo)</option>
+              </select>
+              <textarea name="instructions" rows="6" placeholder="Instrucciones del agente" required></textarea>
+              <button class="btn primary small">Guardar agente</button>
+            </form>
+          </details>
+        </section>
+        <section class="tabpane hidden" id="tab-skills">
+          <ul id="skillList" class="items"></ul>
+          <details class="form-box">
+            <summary>+ Importar skills de código abierto</summary>
+            <form id="importForm" class="stack">
+              <select id="importPreset">
+                <option value="anthropics/skills|skills">anthropics/skills</option>
+                <option value="openai/skills|skills/.curated">openai/skills (curated)</option>
+                <option value="custom">Otro repositorio…</option>
+              </select>
+              <input name="repo" placeholder="dueño/repo" class="hidden">
+              <input name="path" placeholder="subcarpeta (opcional)" class="hidden">
+              <button class="btn primary small">Importar (llegan desactivadas)</button>
+              <p class="muted tiny">Revisa la licencia de cada skill antes de usarla.</p>
+            </form>
+          </details>
+          <details class="form-box">
+            <summary>+ Nueva skill</summary>
+            <form id="skillForm" class="stack">
+              <input name="name" placeholder="nombre-de-la-skill" required>
+              <input name="description" placeholder="Qué hace y cuándo usarla" required>
+              <textarea name="body" rows="6" placeholder="Instrucciones paso a paso (Markdown)" required></textarea>
+              <button class="btn primary small">Guardar skill</button>
+            </form>
+          </details>
+        </section>
+        <section class="tabpane hidden" id="tab-chats">
+          <button id="newChat" class="btn primary small full">+ Chat nuevo</button>
+          <ul id="chatList" class="items"></ul>
+        </section>
+      </aside>
+
+      <!-- Centro: chat -->
+      <section class="panel chat" data-panel="chat">
+        <div id="messages" class="messages">
+          <div class="empty">
+            <h2>¿En qué trabajamos hoy?</h2>
+            <p class="muted">El agente principal reparte el trabajo entre los subagentes activos. Tú das las indicaciones.</p>
+          </div>
+        </div>
+        <form id="composer" class="composer">
+          <textarea id="input" rows="1" placeholder="Escribe una indicación…"></textarea>
+          <button id="send" class="btn primary" type="submit">Enviar</button>
+          <button id="stop" class="btn danger hidden" type="button">Detener</button>
+        </form>
+      </section>
+
+      <!-- Derecha: terminal del VPS -->
+      <section class="panel term" data-panel="terminal">
+        <div class="term-head"><span>Terminal del VPS</span>
+          <div class="keys">
+            <button class="btn ghost" data-key="\u001b">Esc</button>
+            <button class="btn ghost" data-key="\t">Tab</button>
+            <button class="btn ghost" data-key="\u0003">Ctrl+C</button>
+            <button class="btn ghost" data-key="\u001b[A">↑</button>
+            <button class="btn ghost" data-key="\u001b[B">↓</button>
+            <button id="termFit" class="btn ghost">Ajustar</button>
+          </div></div>
+        <div id="terminal"></div>
+      </section>
+    </main>
+
+    <nav class="bottomnav">
+      <button data-view="library">Agentes</button>
+      <button data-view="chat" class="active">Chat</button>
+      <button data-view="terminal">Terminal</button>
+    </nav>
+  </div>
+
+  <script src="/vendor/xterm/lib/xterm.js"></script>
+  <script src="/vendor/xterm-fit/lib/addon-fit.js"></script>
+  <script src="/vendor/marked/lib/marked.umd.js"></script>
+  <script src="/vendor/dompurify/dist/purify.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
