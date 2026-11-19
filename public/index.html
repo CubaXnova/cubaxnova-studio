@@ -7,6 +7,12 @@
   <title>CubaXnova Studio</title>
   <link rel="stylesheet" href="/vendor/xterm/css/xterm.css">
   <link rel="stylesheet" href="/app.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Studio">
 </head>
 <body>
   <!-- Login -->
@@ -127,6 +133,7 @@
           <input id="fileInput" type="file" multiple hidden>
           <button id="attachBtn" class="btn ghost icon" type="button" title="Adjuntar imagen o archivo">📎</button>
           <button id="micBtn" class="btn ghost icon hidden" type="button" title="Hablar (dictar)">🎤</button>
+          <button id="brainBtn" class="btn ghost brain" type="button" title="Cambiar de cerebro (Codex / Claude)">🧠 Codex</button>
           <textarea id="input" rows="1" placeholder="Escribe o dicta…"></textarea>
           <button id="send" class="btn primary" type="submit">Enviar</button>
           <button id="stop" class="btn danger hidden" type="button">■ Detener</button>

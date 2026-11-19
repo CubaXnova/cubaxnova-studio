@@ -8,7 +8,9 @@ import { WebSocketServer } from 'ws';
 import { config, ROOT } from './config.js';
 import { login, logout, requireAuth, isAuthed } from './auth.js';
 import * as lib from './library.js';
-import { sendMessage, listChats, loadChat, deleteChat, codexEnv } from './codex.js';
+import { sendMessage, listChats, loadChat, deleteChat, codexEnv, addChatEntry, markUndone } from './codex.js';
+import { claudeBin, claudeEnv } from './claude.js';
+import * as snaps from './snapshots.js';
 import { attachTerminal } from './terminal.js';
 import crypto from 'node:crypto';
 import * as notify from './notify.js';
@@ -112,15 +114,42 @@ api.post('/settings', wrap((req) => {
 api.post('/telegram/detect', wrap(() => notify.detectChat()));
 api.post('/telegram/test', wrap(async () => { await notify.sendTelegram('👋 Hola desde CubaXnova Studio. Los avisos funcionan.'); return { ok: true }; }));
 
-api.get('/status', wrap(() => new Promise((resolve) => {
-  const bin = config.codexBin || path.join(ROOT, 'node_modules', '.bin', 'codex');
-  const p = spawn(bin, ['login', 'status'], { env: codexEnv() });
+const cmdOut = (bin, args, env) => new Promise((resolve) => {
+  if (!bin) return resolve(null);
+  const p = spawn(bin, args, { env });
   let out = '';
   p.stdout.on('data', (d) => { out += d; });
   p.stderr.on('data', (d) => { out += d; });
-  p.on('error', () => resolve({ codex: 'no instalado', workspace: config.workspaceDir, sandbox: config.codexSandbox }));
-  p.on('close', () => resolve({ codex: out.trim() || 'desconocido', workspace: config.workspaceDir, sandbox: config.codexSandbox }));
-})));
+  p.on('error', () => resolve(null));
+  p.on('close', () => resolve(out.trim()));
+  setTimeout(() => { try { p.kill(); } catch { /* */ } }, 15000);
+});
+api.get('/status', wrap(async () => {
+  const codexBinPath = config.codexBin || path.join(ROOT, 'node_modules', '.bin', 'codex');
+  const [codex, claude] = await Promise.all([
+    cmdOut(codexBinPath, ['login', 'status'], codexEnv()),
+    cmdOut(claudeBin(), ['auth', 'status', '--json'], claudeEnv()),
+  ]);
+  let claudeOk = false;
+  try { claudeOk = Boolean(JSON.parse(claude).loggedIn); } catch { /* sin json */ }
+  return {
+    codex: codex ?? 'no instalado',
+    codexOk: /logged in/i.test(codex || ''),
+    claude: claude === null ? 'no instalado' : claudeOk ? 'con sesión' : 'sin sesión',
+    claudeOk,
+    workspace: config.workspaceDir,
+    sandbox: config.codexSandbox,
+  };
+}));
+
+// Deshacer los cambios de la última tarea.
+api.post('/undo', wrap(async (req) => {
+  if (job) throw new Error('Hay una tarea en marcha. Espera a que termine para deshacer.');
+  const { chatId, hash } = req.body || {};
+  await snaps.undo(hash);
+  if (chatId) markUndone(chatId, hash);
+  return { ok: true };
+}));
 app.use('/api', api);
 
 const server = http.createServer(app);
@@ -166,7 +195,8 @@ const broadcastQueue = () => broadcast({ type: 'queue', items: queueView(), runn
 
 function enqueue(msg) {
   const files = Array.isArray(msg.files) ? msg.files.slice(0, 10).map(String) : [];
-  queue.push({ id: crypto.randomUUID(), chatId: msg.chatId || null, text: String(msg.text).trim(), files, agent: msg.agent || null, at: Date.now() });
+  const provider = msg.provider === 'claude' ? 'claude' : 'codex';
+  queue.push({ id: crypto.randomUUID(), chatId: msg.chatId || null, text: String(msg.text).trim(), files, agent: msg.agent || null, provider, at: Date.now() });
   saveQueue();
   broadcastQueue();
   runNext();
@@ -188,12 +218,18 @@ async function runJob(msg) {
     if (ev.type === 'error') job.error = ev.text;
     broadcast(ev);
   };
+  await snaps.before(msg.text);
   try {
-    await sendMessage({ chatId: msg.chatId, text: msg.text, files: msg.files || [], agentId: msg.agent, emit, signal: job.controller.signal });
+    await sendMessage({ chatId: msg.chatId, text: msg.text, files: msg.files || [], agentId: msg.agent, provider: msg.provider, emit, signal: job.controller.signal });
   } catch (e) {
     emit({ type: 'error', text: e.message });
   } finally {
     const done = job;
+    const snap = await snaps.after(msg.text);
+    if (snap && done.chatId) {
+      addChatEntry(done.chatId, { role: 'snapshot', hash: snap.hash, files: snap.files.slice(0, 200) });
+      broadcast({ type: 'snapshot', chatId: done.chatId, hash: snap.hash, files: snap.files.slice(0, 200) });
+    }
     job = null;
     broadcast({ type: 'idle', chatId: done.chatId });
     if (done.error !== 'Detenido') {

@@ -17,7 +17,10 @@ const SKILLS_DIR = path.join(config.libraryDir, 'skills');
 const USER_AGENTS_DIR = path.join(config.dataDir, 'library', 'agents');
 const USER_SKILLS_DIR = path.join(config.dataDir, 'library', 'skills');
 const STATE_FILE = path.join(config.dataDir, 'state.json');
+// Codex lee ~/.agents/skills y Claude Code ~/.claude/skills (HOME aislado = data/home).
 const ACTIVE_SKILLS_DIR = path.join(config.agentHome, '.agents', 'skills');
+const CLAUDE_SKILLS_DIR = path.join(config.agentHome, '.claude', 'skills');
+fs.mkdirSync(CLAUDE_SKILLS_DIR, { recursive: true });
 for (const d of [AGENTS_DIR, SKILLS_DIR, USER_AGENTS_DIR, USER_SKILLS_DIR]) fs.mkdirSync(d, { recursive: true });
 
 // Devuelve [{ id, file|dir, builtin }] juntando ambos sitios (los tuyos tienen prioridad).
@@ -91,13 +94,15 @@ if (!state) {
 }
 
 export function syncSkills() {
-  // Quita enlaces gestionados por nosotros y vuelve a crear los de las skills activas.
-  for (const name of fs.readdirSync(ACTIVE_SKILLS_DIR)) {
-    const p = path.join(ACTIVE_SKILLS_DIR, name);
-    if (fs.lstatSync(p).isSymbolicLink()) fs.unlinkSync(p);
-  }
-  for (const { id, dir } of skillDirs()) {
-    if (state.skills.includes(id)) fs.symlinkSync(dir, path.join(ACTIVE_SKILLS_DIR, id), 'dir');
+  // Quita enlaces gestionados por nosotros y vuelve a crear los de las skills activas (para Codex y para Claude).
+  for (const target of [ACTIVE_SKILLS_DIR, CLAUDE_SKILLS_DIR]) {
+    for (const name of fs.readdirSync(target)) {
+      const p = path.join(target, name);
+      if (fs.lstatSync(p).isSymbolicLink()) fs.unlinkSync(p);
+    }
+    for (const { id, dir } of skillDirs()) {
+      if (state.skills.includes(id)) fs.symlinkSync(dir, path.join(target, id), 'dir');
+    }
   }
 }
 syncSkills();

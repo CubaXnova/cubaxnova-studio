@@ -9,7 +9,10 @@
     "dev": "node --watch server/index.js",
     "codex-login": "node scripts/codex.js login --device-auth",
     "codex-status": "node scripts/codex.js login status",
-    "codex": "node scripts/codex.js"
+    "codex": "node scripts/codex.js",
+    "claude-login": "node scripts/claude.js auth login",
+    "claude-status": "node scripts/claude.js auth status --text",
+    "claude": "node scripts/claude.js"
   },
   "engines": {
     "node": ">=20"

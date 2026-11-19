@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { config, ROOT } from './config.js';
 import { listAgents, getAgent } from './library.js';
+import { runClaude } from './claude.js';
 
 const CHATS_DIR = path.join(config.dataDir, 'chats');
 const MAX_ROUNDS = 2;
@@ -171,12 +172,29 @@ export function loadChat(id) {
   return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
 }
 function saveChat(c) { c.updated = Date.now(); fs.writeFileSync(path.join(CHATS_DIR, `${c.id}.json`), JSON.stringify(c, null, 1)); }
+/** Añade una entrada al historial de un chat (p. ej. la "foto" para deshacer). */
+export function addChatEntry(chatId, entry) {
+  const c = loadChat(chatId);
+  if (!c) return;
+  c.messages.push({ ...entry, at: Date.now() });
+  saveChat(c);
+}
+export function markUndone(chatId, hash) {
+  const c = loadChat(chatId);
+  if (!c) return;
+  for (const m of c.messages) if (m.role === 'snapshot' && m.hash === hash) m.undone = true;
+  saveChat(c);
+}
 export function deleteChat(id) { if (/^[a-f0-9-]{36}$/.test(id)) fs.rmSync(path.join(CHATS_DIR, `${id}.json`), { force: true }); }
 
 /**
  * Procesa un mensaje del usuario. `emit` manda eventos a la interfaz en vivo.
  */
-export async function sendMessage({ chatId, text, agentId, emit, signal, files = [] }) {
+export const PROVIDERS = { codex: 'Codex', claude: 'Claude' };
+
+export async function sendMessage({ chatId, text, agentId, emit, signal, files = [], provider = 'codex' }) {
+  if (!PROVIDERS[provider]) provider = 'codex';
+  const runAgent = provider === 'claude' ? runClaude : runCodex;
   let chat = chatId && loadChat(chatId);
   if (!chat) chat = { id: crypto.randomUUID(), title: text.slice(0, 60), threadId: null, agentId: null, messages: [] };
   emit({ type: 'chat', chatId: chat.id, title: chat.title });
@@ -194,15 +212,17 @@ export async function sendMessage({ chatId, text, agentId, emit, signal, files =
   saveChat(chat);
 
   // Si cambia el agente principal se empieza un hilo nuevo de Codex con sus instrucciones.
-  let threadId = chat.agentId === principal.id ? chat.threadId : null;
+  // Si cambia el agente o el cerebro (Codex/Claude) se empieza un hilo nuevo.
+  let threadId = chat.agentId === principal.id && (chat.provider || 'codex') === provider ? chat.threadId : null;
   let prompt = threadId ? text : `${principalPrompt(principal, team)}\n\n# Mensaje del usuario\n${text}`;
 
   for (let round = 0; round <= MAX_ROUNDS; round++) {
-    emit({ type: 'turn', agent: principal.id, name: principal.name });
-    const r = await runCodex({ prompt, threadId, signal, images: round === 0 ? images : [], onItem: (item) => emit({ type: 'item', agent: principal.id, item }) });
+    emit({ type: 'turn', agent: principal.id, name: `${principal.name} · ${PROVIDERS[provider]}` });
+    const r = await runAgent({ prompt, threadId, signal, images: round === 0 ? images : [], onItem: (item) => emit({ type: 'item', agent: principal.id, item }) });
     threadId = r.threadId;
     chat.threadId = threadId;
     chat.agentId = principal.id;
+    chat.provider = provider;
     if (r.error) {
       chat.messages.push({ role: 'error', text: r.error, at: Date.now() });
       saveChat(chat);
@@ -227,7 +247,7 @@ export async function sendMessage({ chatId, text, agentId, emit, signal, files =
       const sub = getAgent(d.id);
       chat.messages.push({ role: 'delegation', agent: d.id, text: d.task, at: Date.now() });
       emit({ type: 'delegation', from: principal.id, agent: d.id, name: sub.name, task: d.task });
-      const sr = await runCodex({ prompt: subagentPrompt(sub, d.task), signal, onItem: (item) => emit({ type: 'item', agent: d.id, item }) });
+      const sr = await runAgent({ prompt: subagentPrompt(sub, d.task), signal, onItem: (item) => emit({ type: 'item', agent: d.id, item }) });
       let out = sr.error ? `ERROR: ${sr.error}` : sr.text;
       if (sr.generated?.length) out += `\n\n${sr.generated.map((g) => `![imagen generada](${g})`).join('\n')}`;
       chat.messages.push({ role: 'subagent', agent: d.id, text: out, at: Date.now() });

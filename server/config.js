@@ -27,6 +27,8 @@ export const config = {
   // HOME aislado para Codex: su login, config y skills viven aquí y no tocan nada más del VPS.
   agentHome: path.join(DATA_DIR, 'home'),
   codexBin: env.CODEX_BIN || '',
+  claudeBin: env.CLAUDE_BIN || '',
+  claudeModel: env.CLAUDE_MODEL || '',
   codexModel: env.CODEX_MODEL || '',
   codexSandbox: env.CODEX_SANDBOX || 'workspace-write', // read-only | workspace-write | danger-full-access
   maxDelegations: Number(env.STUDIO_MAX_DELEGATIONS || 3),

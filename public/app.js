@@ -44,6 +44,16 @@ async function api(path, opts = {}) {
 }
 
 let library = { agents: [], skills: [] };
+let provider = store.get('provider') === 'claude' ? 'claude' : 'codex';
+let statusInfo = null;
+function renderBrain() {
+  const b = $('#brainBtn');
+  b.textContent = provider === 'claude' ? '🧠 Claude' : '🧠 Codex';
+  b.className = `btn ghost brain ${provider}`;
+  b.title = provider === 'claude'
+    ? `Cerebro: Claude Code${statusInfo && !statusInfo.claudeOk ? ' (sin sesión: npm run claude-login)' : ''}. Toca para cambiar a Codex.`
+    : 'Cerebro: Codex. Toca para cambiar a Claude Code.';
+}
 let chatId = store.get('chatId');
 let busy = false;
 
@@ -191,6 +201,7 @@ async function openChat(id) {
     else if (m.role === 'subagent') addMsg('sub', name(m.agent), m.text);
     else if (m.role === 'delegation') addDelegation(name(m.agent), m.text);
     else if (m.role === 'error') addMsg('err', 'Error', m.text);
+    else if (m.role === 'snapshot') addSnapshot(m);
   }
 }
 
@@ -262,6 +273,7 @@ function connectChat() {
     else if (ev.type === 'delegation') { addDelegation(ev.name, ev.task); activity = null; items.clear(); thinkingEl.textContent = `${ev.name} trabajando`; box.appendChild(thinkingEl); }
     else if (ev.type === 'error') addMsg('err', 'Error', ev.text);
     else if (ev.type === 'idle') setBusy(false);
+    else if (ev.type === 'snapshot') addSnapshot(ev);
   };
   ws.onclose = () => { thinkingEl.remove(); setTimeout(connectChat, 2000); };
 }
@@ -285,7 +297,7 @@ $('#composer').addEventListener('submit', async (e) => {
   const files = attachments.map((a) => a.path);
   addMsg('user', 'Tú', text || 'Mira los archivos adjuntos.', files);
   pendingSend = true;
-  ws.send(JSON.stringify({ type: 'send', text, files, chatId, agent: $('#agentSelect').value }));
+  ws.send(JSON.stringify({ type: 'send', text, files, chatId, provider, agent: $('#agentSelect').value }));
   input.value = ''; input.style.height = 'auto';
   attachments = []; renderAttachments();
   setBusy(true);
@@ -451,6 +463,44 @@ $('#fileGrid').addEventListener('click', (e) => {
 });
 $('#filesReload').addEventListener('click', () => loadFiles(currentDir));
 
+/* ---------------- Cerebro: Codex o Claude ---------------- */
+$('#brainBtn').addEventListener('click', () => {
+  provider = provider === 'codex' ? 'claude' : 'codex';
+  store.set('provider', provider);
+  renderBrain();
+  if (provider === 'claude' && statusInfo && !statusInfo.claudeOk) {
+    addNote(statusInfo.claude === 'no instalado'
+      ? '⚠ Claude Code no está instalado en el servidor (o pon su ruta en CLAUDE_BIN). Mientras, usa Codex.'
+      : '⚠ Claude Code aún no tiene sesión para Studio. En la Terminal escribe: npm run claude-login');
+  } else addNote(`🧠 Ahora trabaja ${provider === 'claude' ? 'Claude Code' : 'Codex'}. Al cambiar de cerebro empieza una conversación nueva con él dentro de este chat.`);
+});
+
+/* ---------------- Deshacer (fotos del workspace) ---------------- */
+const ST = { A: 'nuevo', M: 'cambiado', D: 'borrado', R: 'renombrado' };
+function addSnapshot(m) {
+  clearEmpty();
+  const el = document.createElement('div');
+  el.className = `snap ${m.undone ? 'undone' : ''}`;
+  const n = m.files?.length || 0;
+  el.innerHTML = `<div class="row"><span>📸 Esta tarea cambió <b>${n}</b> archivo${n === 1 ? '' : 's'}</span>
+    ${m.undone ? '<b>↶ Deshecho</b>' : '<button class="btn small undo">↶ Deshacer</button>'}</div>
+    <details><summary class="muted tiny">Ver archivos</summary><ul>${(m.files || []).map((f) =>
+      `<li><span class="st-${esc(f.status)}">${ST[f.status] || esc(f.status)}</span> ${esc(f.path)}</li>`).join('')}</ul></details>`;
+  el.querySelector('.undo')?.addEventListener('click', async (e) => {
+    if (!confirm(`¿Deshacer los cambios de esta tarea? Se restauran ${n} archivo(s) a como estaban antes.`)) return;
+    e.target.disabled = true;
+    try {
+      await api('/undo', { method: 'POST', body: { chatId, hash: m.hash } });
+      el.classList.add('undone');
+      e.target.outerHTML = '<b>↶ Deshecho</b>';
+    } catch (err) { alert(err.message); e.target.disabled = false; }
+  });
+  box.appendChild(el); scroll();
+}
+
+/* ---------------- App instalable (PWA) ---------------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
 /* ---------------- Terminal ---------------- */
 let term; let fit; let tws;
 function fitTerm() {
@@ -483,13 +533,14 @@ function startTerminal() {
 
 /* ---------------- Inicio ---------------- */
 async function loadStatus() {
-  const s = await api('/status').catch(() => null);
+  const st = await api('/status').catch(() => null);
   const el = $('#status');
-  if (!s) return;
-  const ok = /logged in/i.test(s.codex);
-  el.textContent = ok ? `Codex conectado · ${s.sandbox}` : 'Codex sin conectar';
-  el.title = `${s.codex}\nDirectorio: ${s.workspace}`;
-  el.className = `status ${ok ? 'ok' : 'bad'}`;
+  if (!st) return;
+  statusInfo = st;
+  el.textContent = `Codex ${st.codexOk ? '✔' : '✘'} · Claude ${st.claudeOk ? '✔' : '✘'}`;
+  el.title = `Codex: ${st.codex}\nClaude: ${st.claude}\nDirectorio: ${st.workspace}\nPermisos: ${st.sandbox}`;
+  el.className = `status ${st.codexOk || st.claudeOk ? 'ok' : 'bad'}`;
+  renderBrain();
 }
 let started = false;
 async function start() {
@@ -497,6 +548,7 @@ async function start() {
   $('#app').classList.remove('hidden');
   if (started) return;
   started = true;
+  renderBrain();
   await loadLibrary();
   if (chatId) await openChat(chatId);
   connectChat(); startTerminal(); loadStatus();
