@@ -86,7 +86,7 @@ npm run dev            # http://127.0.0.1:7860
 | `CODEX_SANDBOX` | `workspace-write` | `read-only`, `workspace-write` o `danger-full-access` |
 | `STUDIO_MAX_DELEGATIONS` | `3` | Subagentes como máximo por turno |
 
-Si el sandbox de Codex no funciona en tu VPS (algunos contenedores no lo permiten), pon `CODEX_SANDBOX=danger-full-access`: el servicio sigue limitado por el usuario `studio`.
+En el VPS se usa `CODEX_SANDBOX=danger-full-access` porque la caja propia de Codex (`bwrap`) no funciona en Ubuntu reciente sin tocar AppArmor. La protección la pone systemd: el servicio corre como `studio`, solo puede escribir en `/opt/cubaxnova-studio`, el resto del sistema es de solo lectura y `/home` y `/root` están ocultos.
 
 ## Seguridad
 
