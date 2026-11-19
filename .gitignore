@@ -4,3 +4,13 @@ workspace/
 .env
 *.log
 .DS_Store
+
+# Cosas del usuario studio dentro de la carpeta (HOME = /opt/cubaxnova-studio)
+.local/
+.npm/
+.node/
+.cache/
+.config/
+.claude/
+.claude.json*
+.bash_history
