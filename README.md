@@ -23,7 +23,7 @@ Agentes incluidos: **Orquestador** (principal), **Programador**, **Revisor**, **
 
 Las skills usan el formato abierto **Agent Skills** (`SKILL.md`, ver [agentskills.io](https://agentskills.io)), el mismo que entienden Codex, Claude Code y otras herramientas. Las activas se enlazan en `data/home/.agents/skills`, que es donde Codex las busca.
 
-Incluidas (MIT): `commit-convencional`, `servidor-seguro`, `revision-seguridad`, `plan-de-tarea`.
+Incluidas (MIT): `commit-convencional`, `servidor-seguro`, `revision-seguridad`, `plan-de-tarea` y `estilo-cubaxnova` (ejemplo de guía de estilo para generar arte de un juego).
 
 Desde el panel **Skills → Importar** puedes traer más de:
 - [`anthropics/skills`](https://github.com/anthropics/skills)
