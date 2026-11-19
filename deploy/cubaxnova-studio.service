@@ -13,10 +13,10 @@ Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production
 NoNewPrivileges=true
-# Caja de seguridad: Studio (y Codex y la terminal) solo pueden ESCRIBIR en su carpeta.
-# El resto del sistema queda en solo lectura, /home y /root ocultos, /tmp propio.
+# Caja de seguridad: Studio (y Codex, Claude y la terminal) solo pueden ESCRIBIR en workspace/ y data/.
+# Su propio código, el resto del sistema y tus proyectos quedan en solo lectura; /home y /root ocultos; /tmp propio.
 ProtectSystem=strict
-ReadWritePaths=/opt/cubaxnova-studio
+ReadWritePaths=/opt/cubaxnova-studio/workspace /opt/cubaxnova-studio/data
 ProtectHome=true
 PrivateTmp=true
 # Límites para que nunca le quite recursos a producción
